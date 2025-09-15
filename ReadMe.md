@@ -32,3 +32,23 @@ zhihui
    1. 注册：register
    2. 登录：login
    3. 获取用户信息：me
+```
+zhihui
+├─ checkdb.py
+├─ ReadMe.md
+├─ static
+│  ├─ css
+│  │  └─ style.css
+│  ├─ images
+│  ├─ index.html
+│  └─ js
+│     └─ auth.js
+└─ zhihui
+   ├─ app.py
+   ├─ requirement.txt
+   └─ zhihui
+      ├─ templates
+      ├─ views
+      └─ __init__.py
+
+```
