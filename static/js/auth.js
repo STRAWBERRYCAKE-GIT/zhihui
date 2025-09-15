@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const userUsernameEl = document.getElementById('userUsername');
     const userCreatedAtEl = document.getElementById('userCreatedAt');
     
-    const API_BASE_URL = 'http://localhost:5000/api';
+    const API_BASE_URL = 'http://localhost:5000';
     
     // 检查是否已登录
     checkAuthStatus();
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/register`, {
+            const response = await fetch(`${API_BASE_URL}/signin`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
