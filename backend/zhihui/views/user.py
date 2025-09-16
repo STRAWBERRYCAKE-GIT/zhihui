@@ -1,10 +1,21 @@
-from flask import Blueprint,request,jsonify
-from flask_jwt_extended import JWTManager,create_access_token,jwt_required,get_jwt_identity
+from flask import Blueprint,request,jsonify,current_app
+from flask_jwt_extended import create_access_token,jwt_required,get_jwt_identity
 from werkzeug.security import generate_password_hash,check_password_hash
-import sqlite3
+
+import pymysql
 
 #用户相关的蓝图，包括注册、登录、注销等
 user_bp=Blueprint('user',__name__)
+
+#获取数据库连接
+def get_db_connection():
+    return pymysql.connect(
+        host=current_app.config['MYSQL_HOST'],
+        user=current_app.config['MYSQL_USER'],
+        password=current_app.config['MYSQL_PASSWORD'],
+        database=current_app.config['MYSQL_DB'],
+        cursorclass=pymysql.cursors.DictCursor
+    )
 
 #注册的API
 @user_bp.route('/signin',methods=['POST'])
@@ -24,14 +35,14 @@ def signin():
             return jsonify({"message":"密码长度至少6位"}),400
         
         #检查用户名是否已经存在
-        conn=sqlite3.connect('database.db')
+        conn=get_db_connection()
         c=conn.cursor()
-        c.execute("SELECT id FROM users WHERE username=?",(username,))
+        c.execute("SELECT id FROM users WHERE username=%s",(username,))
         if c.fetchone():
             conn.close()
             return jsonify({"message":"用户名已存在"}),409
         hashed_password=generate_password_hash(password)
-        c.execute("INSERT INTO users (username,password) VALUES(?,?)",
+        c.execute("INSERT INTO users (username,password) VALUES(%s,%s)",
                   (username,hashed_password))
         conn.commit()
         conn.close()
@@ -52,23 +63,23 @@ def login():
 
         if not username or not password:
             return jsonify({"message":"用户名或密码不能为空"}),400
+
         
         #查询用户
-        conn=sqlite3.connect('database.db')
+        conn=get_db_connection()
         c=conn.cursor()
-        c.execute("SELECT id,username,password FROM users WHERE username = ?",(username,))
+        c.execute("SELECT id,username,password FROM users WHERE username = %s",(username,))
         user=c.fetchone()
         conn.close()
-
         #验证用户和密码
-        if user and check_password_hash(user[2],password):
-            access_token=create_access_token(identity=user[1])
+        if user and check_password_hash(user['password'],password):
+            access_token=create_access_token(identity=user['username'])
             return jsonify({
                 "message":"登录成功",
                 "token":access_token,
                 "user":{
-                    "id":user[0],
-                    "username":user[1]
+                    "id":user['id'],
+                    "username":user['username']
                 }
             }),200
         else:
@@ -84,19 +95,26 @@ def login():
 def get_current_user():
     try:
         current_username=get_jwt_identity()
-        conn=sqlite3.connect('database.db')
+        conn=get_db_connection()
         c=conn.cursor()
-        c.execute("SELECT id,username,created_at FROM users WHERE username = ?",
+        c.execute("SELECT id,username,created_at FROM users WHERE username = %s",
                   (current_username,))
         user = c.fetchone()
         conn.close()
 
         if user:
+            # 确保日期时间以 ISO 格式返回
+            created_at = user['created_at']
+            
+            # 如果 created_at 是 datetime 对象，转换为 ISO 格式字符串
+            if hasattr(created_at, 'isoformat'):
+                created_at_str = created_at.isoformat()
+            
             return jsonify({
                 "user":{
-                    "id":user[0],
-                    "username":user[1],
-                    "created_at":user[2]
+                    "id":user['id'],
+                    "username":user['username'],
+                    "created_at":created_at_str
                 }
             }),200
         else:

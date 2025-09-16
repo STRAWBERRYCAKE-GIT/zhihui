@@ -6,18 +6,26 @@
 
 ```
 zhihui
-├─ ReadMe.md				//帮助文档
 ├─ backend
-│  ├─ app.py				//目前只实现了注册登录
-│  └─ requirement.txt		//python依赖包
-├─ checkdb.py				//检查数据库的内容（目前只有用户信息）
-└─ frontend					//ai写的前端，主要测试注册登录功能的，无需在意
-   ├─ css
-   │  └─ style.css
-   ├─ index.html
-   └─ js
-      └─ auth.js
+│  ├─ app.py
+│  ├─ requirement.txt
+│  └─ zhihui
+│     ├─ models
+│     ├─ views
+│     │  └─ user.py
+│     └─ __init__.py
+├─ checkdb.py
+├─ frontend
+│  ├─ css
+│  │  └─ style.css
+│  ├─ images
+│  ├─ index.html
+│  └─ js
+│     └─ auth.js
+└─ ReadMe.md
 ```
+
+
 
 # 使用说明
 
@@ -32,23 +40,22 @@ zhihui
    1. 注册：register
    2. 登录：login
    3. 获取用户信息：me
-```
-zhihui
-├─ checkdb.py
-├─ ReadMe.md
-├─ static
-│  ├─ css
-│  │  └─ style.css
-│  ├─ images
-│  ├─ index.html
-│  └─ js
-│     └─ auth.js
-└─ zhihui
-   ├─ app.py
-   ├─ requirement.txt
-   └─ zhihui
-      ├─ templates
-      ├─ views
-      └─ __init__.py
 
-```
+- MySQL
+
+  1. 创建MySQL数据库和表（后续应该是要改）
+
+     ```
+      CREATE DATABASE zhihui_db;
+      USE zhihui_db;
+      CREATE TABLE users(
+         -> id INT AUTO_INCREMENT PRIMARY KEY,
+         -> username VARCHAR(50) UNIQUE NOT NULL,
+         -> password VARCHAR(120) NOT NULL,
+         -> created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+     ```
+
+     
+
+  2. \_\_init\_\_.py中的MySQL配置要改成本地的

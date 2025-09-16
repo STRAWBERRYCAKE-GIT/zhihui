@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 显示用户信息
     function displayUserInfo(user) {
         userUsernameEl.textContent = user.username;
-        userCreatedAtEl.textContent = new Date(user.created_at+'Z').toLocaleString();
+        userCreatedAtEl.textContent = new Date(user.created_at).toLocaleString();
         console.log(userUsernameEl.textContent);
     }
     
