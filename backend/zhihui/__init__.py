@@ -3,6 +3,8 @@ from flask_jwt_extended import JWTManager
 from datetime import timedelta
 import os
 
+from zhihui.utils import init_xf_image_api
+
 def create_app():
     app = Flask(__name__)
     app.config['MYSQL_HOST'] = 'localhost'
@@ -17,11 +19,9 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB限制
 
-    # 在app.py或配置文件中添加
-    app.config['XF_APP_ID'] = 'd2bc282d'
-    app.config['XF_API_KEY'] = 'efb578c068d715a29ebe7aafc392b7a5'
-    app.config['XF_API_SECRET'] = 'ZTNjMTg0NDhjZDU2ZmUzZjhkZGM2NGRl'
     
+    init_xf_image_api(app)
+
     jwt = JWTManager(app)
     
     from .api.user import user_bp

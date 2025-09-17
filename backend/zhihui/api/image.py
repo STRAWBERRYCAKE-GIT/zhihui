@@ -3,11 +3,10 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
 import datetime
-from zhihui.utils import get_xf_image_api
 import json
 import re
 
-from zhihui.utils import get_db_connection
+from zhihui.utils import get_db_connection,get_xf_image_api
 
 image_bp = Blueprint('image', __name__)
 

@@ -13,9 +13,9 @@ from flask import current_app
 
 class XFImageAPI:
     def __init__(self):
-        self.app_id = current_app.config['XF_APP_ID']
-        self.api_key = current_app.config['XF_API_KEY']
-        self.api_secret = current_app.config['XF_API_SECRET']
+        self.app_id = 'd2bc282d'
+        self.api_key = 'efb578c068d715a29ebe7aafc392b7a5'
+        self.api_secret = 'ZTNjMTg0NDhjZDU2ZmUzZjhkZGM2NGRl'
         self.host = "spark-api.cn-huabei-1.xf-yun.com"
         self.path = "/v2.1/image"
         self.url = f"wss://{self.host}{self.path}"
