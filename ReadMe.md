@@ -10,9 +10,15 @@ zhihui
 │  ├─ app.py
 │  ├─ requirement.txt
 │  └─ zhihui
-│     ├─ models
-│     ├─ views
+│     ├─ api
+│     │  ├─ image.py
 │     │  └─ user.py
+│     ├─ models
+│     ├─ uploads
+│     ├─ utils
+│     │  ├─ database.py
+│     │  ├─ VLM_api.py
+│     │  └─ __init__.py
 │     └─ __init__.py
 ├─ checkdb.py
 ├─ frontend
@@ -54,8 +60,30 @@ zhihui
          -> password VARCHAR(120) NOT NULL,
          -> created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE images (
+       -> id INT AUTO_INCREMENT PRIMARY KEY,
+         -> user_id INT NOT NULL,
+       -> filename VARCHAR(255) NOT NULL,
+         -> original_name VARCHAR(255) NOT NULL,
+         -> score INT,
+         -> comment TEXT,
+         -> upload_time DATETIME NOT NULL,
+         -> FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+       );
      ```
-
+  
      
-
+  
   2. \_\_init\_\_.py中的MySQL配置要改成本地的
+  
+  3. 目前两张表的结构如下
+  
+     ![image-20250917154249499](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154249499.png)
+  
+     ![image-20250917154343394](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154343394.png)
+  
+     ps：images又改了下
+     
+     ![image-20250917170125091](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917170125091.png)
+     
+     

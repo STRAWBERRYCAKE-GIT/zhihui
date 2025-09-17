@@ -1,21 +1,13 @@
 from flask import Blueprint,request,jsonify,current_app
 from flask_jwt_extended import create_access_token,jwt_required,get_jwt_identity
 from werkzeug.security import generate_password_hash,check_password_hash
+from zhihui.utils import get_db_connection
 
-import pymysql
 
 #用户相关的蓝图，包括注册、登录、注销等
 user_bp=Blueprint('user',__name__)
 
-#获取数据库连接
-def get_db_connection():
-    return pymysql.connect(
-        host=current_app.config['MYSQL_HOST'],
-        user=current_app.config['MYSQL_USER'],
-        password=current_app.config['MYSQL_PASSWORD'],
-        database=current_app.config['MYSQL_DB'],
-        cursorclass=pymysql.cursors.DictCursor
-    )
+
 
 #注册的API
 @user_bp.route('/signin',methods=['POST'])
@@ -105,10 +97,7 @@ def get_current_user():
         if user:
             # 确保日期时间以 ISO 格式返回
             created_at = user['created_at']
-            
-            # 如果 created_at 是 datetime 对象，转换为 ISO 格式字符串
-            if hasattr(created_at, 'isoformat'):
-                created_at_str = created_at.isoformat()
+            created_at_str = created_at.isoformat()
             
             return jsonify({
                 "user":{
