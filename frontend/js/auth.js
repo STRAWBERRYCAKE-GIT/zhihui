@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const userUsernameEl = document.getElementById('userUsername');
     const userCreatedAtEl = document.getElementById('userCreatedAt');
     
-    const API_BASE_URL = 'http://localhost:5000';
+    const API_BASE_URL = 'http://localhost:5000/user';
     
     // 检查是否已登录
     checkAuthStatus();

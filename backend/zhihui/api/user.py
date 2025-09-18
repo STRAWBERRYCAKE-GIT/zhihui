@@ -10,7 +10,7 @@ user_bp=Blueprint('user',__name__)
 
 
 #注册的API
-@user_bp.route('/signin',methods=['POST'])
+@user_bp.route('/user/signin',methods=['POST'])
 def signin():
     try:
         data=request.get_json()
@@ -46,7 +46,7 @@ def signin():
         return jsonify({"message":"服务器错误，请稍后再试"}),500
     
 #登录的API
-@user_bp.route('/login',methods=['POST'])
+@user_bp.route('/user/login',methods=['POST'])
 def login():
     try:
         data = request.get_json()
@@ -82,7 +82,7 @@ def login():
         return jsonify({"message": "服务器繁忙，请稍后再试"}),500
     
 #获取当前用户信息
-@user_bp.route('/me',methods=['GET'])
+@user_bp.route('/user/me',methods=['GET'])
 @jwt_required()
 def get_current_user():
     try:

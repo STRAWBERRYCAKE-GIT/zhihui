@@ -24,10 +24,12 @@ def create_app():
 
     jwt = JWTManager(app)
     
+    #导入蓝图
     from .api.user import user_bp
-    from .api.image import image_bp  # 导入新的蓝图
+    from .api.image import image_bp
     
+    #注册蓝图
     app.register_blueprint(user_bp)
-    app.register_blueprint(image_bp)  # 注册新的蓝图
+    app.register_blueprint(image_bp)
     
     return app
