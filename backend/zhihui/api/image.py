@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from pypinyin import lazy_pinyin
@@ -104,6 +104,48 @@ def upload_image():
         print(f"上传失败: {e}")
         return jsonify({"message": "服务器错误，请稍后再试"}), 500
 
+# 提供图片访问的API
+@image_bp.route('/image/file/<filename>', methods=['GET'])
+@jwt_required()
+def get_image_file(filename):
+    try:
+        current_username = get_jwt_identity()
+        
+        # 验证用户是否有权访问此图片
+        conn = get_db_connection()
+        try:
+            c = conn.cursor()
+            
+            # 检查图片是否属于当前用户
+            c.execute("""
+                SELECT i.filename 
+                FROM images i 
+                JOIN users u ON i.user_id = u.id 
+                WHERE u.username = %s AND i.filename = %s
+            """, (current_username, filename))
+            
+            image = c.fetchone()
+            
+            if not image:
+                abort(403)  # 无权访问
+                
+            # 构建图片完整路径
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            image_path = os.path.join(upload_folder, filename)
+            
+            if not os.path.exists(image_path):
+                abort(404)  # 图片不存在
+                
+            # 发送图片文件
+            return send_file(image_path)
+            
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"获取图片失败: {e}")
+        abort(500)
+
 # 获取用户历史图片
 @image_bp.route('/image/history', methods=['GET'])
 @jwt_required()
@@ -122,12 +164,12 @@ def get_history():
                 user_id = user['id']
                 # 获取用户上传的图片历史
                 c.execute(
-                    "SELECT id, original_name, filename, score, upload_time FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, original_name, filename, score, evaluation, strengths, improvements, upload_time FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
                 
-                # 转换日期时间为字符串格式
+                # 转换日期时间为字符串格式，并添加图片访问URL
                 result = []
                 for img in images:
                     result.append({
@@ -135,7 +177,11 @@ def get_history():
                         "original_name": img['original_name'],
                         "filename": img['filename'],
                         "score": img['score'],
-                        "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time']
+                        "evaluation": img['evaluation'],
+                        "strengths": json.loads(img['strengths']) if img['strengths'] else [],
+                        "improvements": json.loads(img['improvements']) if img['improvements'] else [],
+                        "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time'],
+                        "image_url": f"/image/file/{img['filename']}"  # 添加图片访问URL
                     })
       
                 return jsonify({"images": result}), 200
