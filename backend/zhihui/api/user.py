@@ -111,3 +111,9 @@ def get_current_user():
     except Exception as e:
         print(f"获取用户信息错误: {e}")
         return jsonify({"message":"服务器错误，请稍后再试"}),500
+
+#退出  
+@user_bp.route('/user/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    return jsonify({"message": "退出成功"}), 200
