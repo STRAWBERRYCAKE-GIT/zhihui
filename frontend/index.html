@@ -62,10 +62,27 @@
             
             <div class="button-group">
                 <button id="logoutBtn" class="logout">退出登录</button>
+                <button id="deleteAccountBtn" class="delete-account">注销账户</button>
             </div>
-            
+        </div>
+        
+        <!-- 注销确认模态框 -->
+        <div id="deleteAccountModal" class="modal">
+            <div class="modal-content">
+                <h3>确认注销账户</h3>
+                <p>此操作将永久删除您的账户和所有相关数据，无法恢复。</p>
+                <div class="form-group">
+                    <label for="confirmPasswordInput">请输入密码确认:</label>
+                    <input type="password" id="confirmPasswordInput" placeholder="请输入您的密码">
+                </div>
+                <div class="modal-buttons">
+                    <button id="cancelDeleteBtn" class="cancel-btn">取消</button>
+                    <button id="confirmDeleteBtn" class="confirm-delete-btn">确认注销</button>
+                </div>
+            </div>
         </div>
     </div>
+
 
     <script src="js/auth.js"></script>
 </body>

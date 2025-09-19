@@ -1,4 +1,4 @@
-from flask import Blueprint,request,jsonify,current_app
+from flask import Blueprint,request,jsonify
 from flask_jwt_extended import create_access_token,jwt_required,get_jwt_identity
 from werkzeug.security import generate_password_hash,check_password_hash
 from zhihui.utils import get_db_connection
@@ -6,8 +6,6 @@ from zhihui.utils import get_db_connection
 
 #用户相关的蓝图，包括注册、登录、注销等
 user_bp=Blueprint('user',__name__)
-
-
 
 #注册的API
 @user_bp.route('/user/signin',methods=['POST'])
@@ -117,3 +115,44 @@ def get_current_user():
 @jwt_required()
 def logout():
     return jsonify({"message": "退出成功"}), 200
+
+# 注销账号的API
+@user_bp.route('/user/delete', methods=['POST'])
+@jwt_required()
+def delete_account():
+    try:
+        current_username = get_jwt_identity()
+        
+        # 获取请求数据，可能需要密码确认
+        data = request.get_json()
+        password = data.get('password')
+        
+        if not password:
+            return jsonify({"message": "需要提供密码确认"}), 400
+        
+        # 验证用户身份
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id, password FROM users WHERE username = %s", (current_username,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"message": "用户不存在"}), 404
+        
+        # 验证密码
+        if not check_password_hash(user['password'], password):
+            conn.close()
+            return jsonify({"message": "密码错误"}), 401
+        
+        # 删除用户账号及相关数据
+        c.execute("DELETE FROM users WHERE id = %s", (user['id'],))
+        c.execute("DELETE FROM images WHERE user_id = %s",(user['id']))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"message": "账号已成功注销"}), 200
+        
+    except Exception as e:
+        print(f"注销账号失败: {e}")
+        return jsonify({"message": "服务器错误，请稍后再试"}), 500

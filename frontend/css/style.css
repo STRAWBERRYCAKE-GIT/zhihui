@@ -2,177 +2,181 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
-    font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+    background-color: #f5f8fa;
     color: #333;
+    line-height: 1.6;
     padding: 20px;
 }
 
 .container {
-    width: 100%;
     max-width: 500px;
-}
-
-.auth-container {
-    background-color: white;
-    padding: 30px;
+    margin: 0 auto;
+    background: white;
     border-radius: 10px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
 }
 
-.form-container {
-    transition: all 0.3s ease;
+.auth-container, .user-panel {
+    padding: 30px;
 }
 
 h2 {
     text-align: center;
     margin-bottom: 20px;
-    color: #333;
+    color: #2c3e50;
 }
 
 .form-group {
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
 label {
     display: block;
     margin-bottom: 5px;
-    font-weight: bold;
+    font-weight: 600;
 }
 
-input[type="text"],
-input[type="email"],
-input[type="password"] {
+input {
     width: 100%;
     padding: 12px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 5px;
     font-size: 16px;
-    transition: border-color 0.3s;
-}
-
-input:focus {
-    border-color: #667eea;
-    outline: none;
 }
 
 small {
-    display: block;
-    margin-top: 5px;
     color: #666;
-    font-size: 12px;
+    font-size: 0.85rem;
 }
 
 button {
     width: 100%;
     padding: 12px;
-    background-color: #4CAF50;
+    background-color: #3498db;
     color: white;
     border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    border-radius: 5px;
     font-size: 16px;
-    margin-top: 10px;
+    cursor: pointer;
     transition: background-color 0.3s;
 }
 
 button:hover {
-    background-color: #45a049;
+    background-color: #2980b9;
 }
 
-button.logout {
-    background-color: #f44336;
+.logout {
+    background-color: #e74c3c;
 }
 
-button.logout:hover {
-    background-color: #d32f2f;
+.logout:hover {
+    background-color: #c0392b;
+}
+
+.delete-account {
+    background-color: #95a5a6;
+    margin-top: 10px;
+}
+
+.delete-account:hover {
+    background-color: #7f8c8d;
 }
 
 .message {
-    margin-top: 15px;
     padding: 10px;
-    border-radius: 4px;
+    margin: 20px 0;
+    border-radius: 5px;
     text-align: center;
 }
 
-.error {
-    background-color: #ffebee;
-    color: #c62828;
-}
-
 .success {
-    background-color: #e8f5e9;
-    color: #2e7d32;
+    background-color: #d4edda;
+    color: #155724;
 }
 
-.user-panel {
-    background-color: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+.error {
+    background-color: #f8d7da;
+    color: #721c24;
 }
 
-.user-panel h2 {
-    margin-bottom: 20px;
+.warning {
+    background-color: #fff3cd;
+    color: #856404;
 }
 
-#userInfo {
-    margin-bottom: 20px;
-}
-
-#userInfo p {
-    margin-bottom: 10px;
-    padding: 8px;
-    background-color: #f9f9f9;
-    border-radius: 4px;
-}
-
-.button-group {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.button-group button {
-    width: auto;
-    flex: 1;
-}
-
-.protected-data {
-    padding: 15px;
-    background-color: #e8f5e9;
-    border-radius: 4px;
-    border-left: 4px solid #4CAF50;
+p {
+    text-align: center;
+    margin-top: 20px;
 }
 
 a {
-    color: #667eea;
+    color: #3498db;
     text-decoration: none;
-    cursor: pointer;
 }
 
 a:hover {
     text-decoration: underline;
 }
 
-@media (max-width: 600px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .auth-container,
-    .user-panel {
-        padding: 20px;
-    }
-    
-    .button-group {
-        flex-direction: column;
-    }
+.button-group {
+    margin-top: 25px;
+}
+
+/* 模态框样式 */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal h3 {
+    margin-bottom: 20px;
+    color: #e74c3c;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    width: 48%;
+}
+
+.cancel-btn {
+    background-color: #95a5a6;
+}
+
+.cancel-btn:hover {
+    background-color: #7f8c8d;
+}
+
+.confirm-delete-btn {
+    background-color: #e74c3c;
+}
+
+.confirm-delete-btn:hover {
+    background-color: #c0392b;
 }

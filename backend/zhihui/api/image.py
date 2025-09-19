@@ -7,7 +7,6 @@ import datetime
 import json
 import re
 import uuid
-import tempfile
 
 from zhihui.utils import get_db_connection,get_xf_image_api
 

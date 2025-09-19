@@ -10,8 +10,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const showRegisterLink = document.getElementById('showRegister');
     const showLoginLink = document.getElementById('showLogin');
     const logoutBtn = document.getElementById('logoutBtn');
+    const deleteAccountBtn = document.getElementById('deleteAccountBtn');
     const userUsernameEl = document.getElementById('userUsername');
     const userCreatedAtEl = document.getElementById('userCreatedAt');
+    
+    // 模态框相关元素
+    const deleteAccountModal = document.getElementById('deleteAccountModal');
+    const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+    const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
     
     const API_BASE_URL = 'http://localhost:5000/user';
     
@@ -118,7 +125,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    
     // 退出登录
     logoutBtn.addEventListener('click', function() {
         localStorage.removeItem('token');
@@ -126,6 +132,66 @@ document.addEventListener('DOMContentLoaded', function() {
         authContainer.style.display = 'block';
         userPanel.style.display = 'none';
         showMessage('已退出登录', 'success');
+    });
+    
+    // 打开注销账户确认模态框
+    deleteAccountBtn.addEventListener('click', function() {
+        deleteAccountModal.style.display = 'flex';
+        confirmPasswordInput.value = '';
+    });
+    
+    // 取消注销
+    cancelDeleteBtn.addEventListener('click', function() {
+        deleteAccountModal.style.display = 'none';
+    });
+    
+    // 确认注销账户
+    confirmDeleteBtn.addEventListener('click', async function() {
+        const password = confirmPasswordInput.value;
+        
+        if (!password) {
+            showMessage('请输入密码确认', 'error');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            showMessage('请先登录', 'error');
+            deleteAccountModal.style.display = 'none';
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ password })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showMessage(data.message, 'success');
+                // 清除本地存储
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                // 隐藏模态框
+                deleteAccountModal.style.display = 'none';
+                // 显示登录表单
+                authContainer.style.display = 'block';
+                userPanel.style.display = 'none';
+                loginFormContainer.style.display = 'block';
+                registerFormContainer.style.display = 'none';
+            } else {
+                showMessage(data.message, 'error');
+            }
+        } catch (error) {
+            showMessage('网络错误，请稍后再试', 'error');
+        }
     });
     
     // 检查认证状态
@@ -189,7 +255,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayUserInfo(user) {
         userUsernameEl.textContent = user.username;
         userCreatedAtEl.textContent = new Date(user.created_at).toLocaleString();
-        console.log(userUsernameEl.textContent);
     }
     
     // 显示用户面板
@@ -222,4 +287,11 @@ document.addEventListener('DOMContentLoaded', function() {
         messageEl.textContent = '';
         messageEl.className = 'message';
     }
+    
+    // 点击模态框外部关闭
+    window.addEventListener('click', function(event) {
+        if (event.target === deleteAccountModal) {
+            deleteAccountModal.style.display = 'none';
+        }
+    });
 });
