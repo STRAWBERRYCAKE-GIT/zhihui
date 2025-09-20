@@ -14,20 +14,28 @@ zhihui
 │     │  ├─ image.py
 │     │  └─ user.py
 │     ├─ models
-│     ├─ uploads
 │     ├─ utils
 │     │  ├─ database.py
 │     │  ├─ VLM_api.py
 │     │  └─ __init__.py
 │     └─ __init__.py
-├─ checkdb.py
 ├─ frontend
-│  ├─ css
-│  │  └─ style.css
-│  ├─ images
+│  ├─ .eslintrc.cjs
 │  ├─ index.html
-│  └─ js
-│     └─ auth.js
+│  ├─ package-lock.json
+│  ├─ package.json
+│  ├─ public
+│  ├─ src
+│  │  ├─ App.css
+│  │  ├─ App.tsx
+│  │  ├─ auth
+│  │  │  ├─ AuthProvider.tsx
+│  │  │  ├─ Login.tsx
+│  │  │  └─ Register.tsx
+│  │  ├─ index.css
+│  │  └─ main.tsx
+│  ├─ tsconfig.json
+│  └─ tsconfig.node.json
 └─ ReadMe.md
 ```
 
@@ -35,55 +43,90 @@ zhihui
 
 # 使用说明
 
-- python虚拟环境（不用也行，但感觉用会方便一些），参考链接如下<https://blog.csdn.net/weixin_38256474/article/details/81289702?fromshare=blogdetail&sharetype=blogdetail&sharerId=81289702&sharerefer=PC&sharesource=2303_80145979&sharefrom=from_link>
-  1. cmd进入当前目录
+- 前端环境配置
+  1. 如果没有安装Node.js：https://nodejs.org/下载和安装
+  2. 打开命令行工具，输入node -v和npm -v确认安装成功
+  3. 在命令行工具中，进入frontend所在文件夹，输入``npm install``
+
+- 后端环境配置（虚拟环境）
+  1. 打开命令行工具，进入backend所在文件夹
   2. ``python -m venv venv`` ，venv是虚拟环境，python环境依赖的包都会保存在该文件夹中
   3. ``cd venv/Scripts`` 
-  4. ``activate`` ,激活虚拟环境
-  5. ``pip install -r requirement.txt`` ，安装所有依赖
+  4. ``activate`` ,激活虚拟环境（``deactivate``可以退出虚拟环境）
+  5. ``pip install -r requirement.txt`` ，安装所有依赖，如果不成功可以接入镜像源，``pip install -r server\zhihui\backend\requirement.txt -i https://pypi.tuna.tsinghua.edu.cn/simple``
 
- - 目前实现的api
-   1. 注册：register
-   2. 登录：login
-   3. 获取用户信息：me
+- 数据库MySQL
 
-- MySQL
+  1. 下载安装MySQL，https://dev.mysql.com/downloads/mysql/（选中间的那个下载）
 
-  1. 创建MySQL数据库和表（后续应该是要改）
+  2. 解压之后把bin所在的文件路径添加到环境变量里
 
+     ![image-20250920181843013](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250920181843013.png)
+
+  3. 新建一个my.ini文件
+
+     ![image-20250920181902658](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250920181902658.png)
+
+  4. ```
+     [mysqld]
+     basedir=D:\MySQL\mysql-9.4.0-winx64\
+     datadir=D:\MySQL\mysql-9.4.0-winx64\data\
+     port=3306
      ```
-      CREATE DATABASE zhihui_db;
-      USE zhihui_db;
-      CREATE TABLE users(
-         -> id INT AUTO_INCREMENT PRIMARY KEY,
-         -> username VARCHAR(50) UNIQUE NOT NULL,
-         -> password VARCHAR(120) NOT NULL,
-         -> created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE images (
-       -> id INT AUTO_INCREMENT PRIMARY KEY,
-         -> user_id INT NOT NULL,
-       -> filename VARCHAR(255) NOT NULL,
-         -> original_name VARCHAR(255) NOT NULL,
-         -> score INT,
-         -> comment TEXT,
-         -> upload_time DATETIME NOT NULL,
-         -> FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-       );
-     ```
+
+     编辑my.ini文件，其中路径换成自己的（basedir和datadir）
+
+  5. 以管理员身份运行cmd，先切换到bin目录，输入``mysqld -install``
+
+  6. ``mysqld --initialize-insecure --user=mysql``
+
+  7. ``net start mysql``
+
+  8. ``mysql -u root -p``，让输入密码直接回车
+
+  9. ``ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '你的密码';``设置你的密码
+
+  10. 重启一下：``exit``
+
+      ``net stop mysql``
+
+      ``net start mysql``
+
+  11. ``mysql -u root -p``，然后输入刚刚设置的密码
+  12. 创建MySQL数据库和表
+
+  ```
+   CREATE DATABASE zhihui_db;
+   USE zhihui_db;
+   CREATE TABLE users(
+      -> id INT AUTO_INCREMENT PRIMARY KEY,
+      -> username VARCHAR(50) UNIQUE NOT NULL,
+      -> password VARCHAR(255) NOT NULL,
+      -> created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   CREATE TABLE images (
+    -> id INT AUTO_INCREMENT PRIMARY KEY,
+      -> user_id INT NOT NULL,
+    -> filename VARCHAR(255) NOT NULL,
+      -> original_name VARCHAR(255) NOT NULL,
+      -> score INT,
+      -> evaluation TEXT,
+      ->strengths TEXT,
+      ->improvements TEXT,
+      -> upload_time DATETIME NOT NULL,
+      -> FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  ```
+
+  ``describe users``,``describe images``，两张表的结构如下所示
+
+  ![image-20250917154249499](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154249499.png)
+
+  ![image-20250917170125091](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917170125091.png)
+
   
-     
-  
-  2. \_\_init\_\_.py中的MySQL配置要改成本地的
-  
-  3. 目前两张表的结构如下
-  
-     ![image-20250917154249499](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154249499.png)
-  
-     ![image-20250917154343394](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154343394.png)
-  
-     ps：images又改了下
-     
-     ![image-20250917170125091](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917170125091.png)
-     
-     
+
+- 运行
+  1. \_\_init\_\_.py中的MySQL的配置密码记得改成自己设置的密码
+  2. 运行app.py
+  3. 在命令提示符中，进入frontend文件夹，输入``npm run dev``,就可以运行了
