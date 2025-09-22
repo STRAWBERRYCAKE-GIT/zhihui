@@ -151,6 +151,8 @@ def get_image_file(filename):
 def get_history():
     try:
         current_username = get_jwt_identity()
+        print(f"当前登录用户: {current_username}")  # 添加调试日志
+        
         conn = get_db_connection()
         try:
             c = conn.cursor()
@@ -161,12 +163,15 @@ def get_history():
             
             if user:
                 user_id = user['id']
+                print(f"用户ID: {user_id}")  # 添加调试日志
+                
                 # 获取用户上传的图片历史
                 c.execute(
                     "SELECT id, original_name, filename, score, evaluation, strengths, improvements, upload_time FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
+                print(f"查询到图片数量: {len(images)}")  # 添加调试日志
                 
                 # 转换日期时间为字符串格式，并添加图片访问URL
                 result = []
@@ -180,11 +185,12 @@ def get_history():
                         "strengths": json.loads(img['strengths']) if img['strengths'] else [],
                         "improvements": json.loads(img['improvements']) if img['improvements'] else [],
                         "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time'],
-                        "image_url": f"/image/file/{img['filename']}"  # 添加图片访问URL
+                        "image_url": f"/image/file/{img['filename']}"
                     })
       
                 return jsonify({"images": result}), 200
             else:
+                print(f"未找到用户: {current_username}")  # 添加调试日志
                 return jsonify({"message": "用户不存在"}), 404
         finally:
             conn.close()
