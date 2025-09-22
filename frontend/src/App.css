@@ -393,3 +393,108 @@ exit-button {
 .video-icon {
   font-size: 16px;
 }
+
+/* 修复：缺失的 .exit-button 基础样式（原先误写为 exit-button 无点） */
+.exit-button {
+  width: 70px;
+  height: 50px;
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =================== 响应式与兼容性修复（追加覆盖） =================== */
+:root {
+  --sidebar-w: 120px;
+  --content-max-w: 900px;
+  --score-panel-min: 320px;
+  --score-panel-ideal: 28vw;
+  --score-panel-max: 480px;
+  --page-padding: 30px;
+}
+
+/* 1) 使用 dvh 避免移动端/不同浏览器对 100vh 的差异，同时让页面可纵向滚动 */
+.app-container {
+  height: 100dvh;
+  width: 100%;
+}
+
+/* 2) 主内容可滚动，防止因固定高度导致底部按钮被裁切 */
+.main-content {
+  overflow-y: auto;
+}
+
+/* 3) 统一中间画布区域与图片区域的尺寸策略，避免固定像素在不同缩放下变形或溢出 */
+.upload-placeholder,
+.uploaded-image {
+  width: min(90vw, var(--content-max-w));
+  max-width: 100%;
+  aspect-ratio: 4 / 3; /* 保持稳定比例 */
+  height: auto; /* 随宽度自适应 */
+  max-height: calc(100dvh - 280px); /* 预留顶部标题、底部按钮空间，避免溢出 */
+}
+
+/* 旧规则中对 .uploaded-image 的固定宽高覆盖为上面自适应策略 */
+.uploaded-image {
+  object-fit: contain;
+}
+
+/* 4) 右侧评分面板采用 clamp 保持跨分辨率一致的宽度表现 */
+.score-panel {
+  width: clamp(var(--score-panel-min), var(--score-panel-ideal), var(--score-panel-max));
+}
+
+/* 5) 底部上传按钮容器吸附在可视区域底部，避免滚动时被遮挡/消失 */
+.upload-button-container {
+  position: sticky;
+  bottom: 0;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
+  backdrop-filter: saturate(120%) blur(4px);
+  z-index: 10; /* 确保不被图片覆盖 */
+}
+
+/* 6) 小屏优化：减小侧栏和内边距，确保主要内容留白充足 */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 96px;
+  }
+  .main-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --page-padding: 16px;
+  }
+  .sidebar {
+    width: 80px;
+    padding: 16px 0;
+  }
+  .main-content {
+    padding: var(--page-padding);
+  }
+  .score-panel {
+    width: clamp(280px, 34vw, 420px);
+  }
+  .upload-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 7) 防止水平溢出导致页面缩放异常 */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
