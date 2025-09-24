@@ -1,3 +1,3 @@
 from .database import get_db_connection
-from .VLM_api import init_xf_image_api,get_xf_image_api
-__all__ = ['get_db_connection','init_xf_image_api','get_xf_image_api']
+from .VLM_api import gpt_api
+__all__ = ['get_db_connection','gpt_api']

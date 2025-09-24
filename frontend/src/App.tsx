@@ -149,7 +149,6 @@ function App() {
       setSelectedImage(imageUrl);
       setEvaluation({
         score: record.score,
-        evaluation: record.evaluation,
         strengths: record.strengths,
         improvements: record.improvements,
         filename: record.original_name
@@ -313,10 +312,7 @@ function App() {
                         <div className="score-label">综合评分</div>
                       </div>
                       
-                      <div className="evaluation-text">
-                        <h4>评价：</h4>
-                        <p>{evaluation.evaluation}</p>
-                      </div>
+
                       
                       {evaluation.strengths && evaluation.strengths.length > 0 && (
                         <div className="strengths">

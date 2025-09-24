@@ -3,7 +3,6 @@ from flask_jwt_extended import JWTManager
 from datetime import timedelta
 import os
 
-from zhihui.utils import init_xf_image_api
 
 def create_app():
     app = Flask(__name__)
@@ -17,10 +16,8 @@ def create_app():
     
     # 添加图片上传配置
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
-    app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024  # 4MB限制
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB限制
 
-    
-    init_xf_image_api(app)
 
     jwt = JWTManager(app)
     
