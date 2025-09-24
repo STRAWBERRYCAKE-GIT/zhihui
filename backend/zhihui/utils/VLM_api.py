@@ -1,9 +1,12 @@
 import base64
 from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
+load_dotenv()  # 会自动读取 .env 文件
 client = OpenAI(
     base_url='https://api.openai-proxy.org/v1',
-    api_key='sk-QNQJP1VvngCWO1Ajv98J1KTWVAKInB79GvV08YtlVDwaR0ia',
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 # 定义 JSON Schema(为了结构化输出)
