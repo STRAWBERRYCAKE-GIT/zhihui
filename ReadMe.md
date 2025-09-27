@@ -1,3 +1,13 @@
+images表有修改
+
+```
+ALTER TABLE zhihui_db.images ADD image_url varchar(500) NOT NULL;
+ALTER TABLE zhihui_db.images DROP COLUMN evaluation;
+ALTER TABLE zhihui_db.images DROP COLUMN improvements;
+ALTER TABLE zhihui_db.images ADD suggestions TEXT NULL;
+ALTER TABLE zhihui_db.images ADD dimensions json NULL;
+```
+
 # 项目介绍
 
 # 环境依赖

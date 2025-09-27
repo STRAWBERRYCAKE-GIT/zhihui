@@ -6,18 +6,29 @@ import os
 import datetime
 import json
 import uuid
-
 from zhihui.utils import get_db_connection,gpt_api
 
 image_bp = Blueprint('image', __name__)
 
 # 允许的文件扩展名
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg','webp'}
 
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def compute_total_score(dimensions):
+    """
+    将所有维度的 weighted_score 相加，四舍五入为整数。
+    若某项缺失 weighted_score，则视为 0。
+    """
+    total = 0.0
+    for d in dimensions:
+        ws = d.get("weighted_score")
+        if isinstance(ws, (int, float)):
+            total += float(ws)
+    return int(round(total))
+    
 # 图片上传API
 @image_bp.route('/image/upload', methods=['POST'])
 @jwt_required()
@@ -48,13 +59,32 @@ def upload_image():
             try:
                 file.stream.seek(0)  # 重置文件流位置
                 # 调用API获取评价
-                evaluation_data = gpt_api(file.stream)
-                if isinstance(evaluation_data, str):
-                    evaluation_data = json.loads(evaluation_data)
-                # 获取当前用户
-                current_username = get_jwt_identity()
-                conn = get_db_connection()
+                raw = gpt_api(file.stream)
+                if raw is None:
+                    raise Exception("AI 返回为空")
+                if isinstance(raw, dict):
+                    # 兼容 { "data": {...}, "truncated": ... } 或 直接就是 dict
+                    evaluation_data = raw.get("data", raw)
+                elif isinstance(raw, str):
+                    try:
+                        evaluation_data = json.loads(raw)
+                    except Exception:
+                        raise Exception("无法解析 AI 返回的字符串")
+                else:
+                    raise Exception("AI 返回格式不支持")
                 try:
+                    # 解析评价结果
+                    dimensions = evaluation_data.get("dimensions", [])
+                    dimensions_json = json.dumps(dimensions, ensure_ascii=False)
+                    summary = evaluation_data.get("summary", {})
+                    strengths = summary.get("strengths", [])
+                    strengths_json = json.dumps(strengths, ensure_ascii=False)
+                    suggestions = summary.get("suggestions", [])
+                    suggestions_json = json.dumps(suggestions, ensure_ascii=False)
+                    score = compute_total_score(dimensions)
+                    # 获取当前用户
+                    current_username = get_jwt_identity()
+                    conn = get_db_connection()
                     c = conn.cursor()
                     # 获取用户ID
                     c.execute("SELECT id FROM users WHERE username = %s", (current_username,))
@@ -64,36 +94,36 @@ def upload_image():
                         file.save(filepath)
                         user_id = user['id']
                         # 保存图片信息和评价到数据库
-                        c.execute(
-                            "INSERT INTO images (user_id, filename, original_name, score, strengths, improvements, upload_time) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                            (user_id, unique_filename, filename, 
-                            evaluation_data.get("overall_score", 50), 
-                            json.dumps(evaluation_data.get("strengths", [])), 
-                            json.dumps(evaluation_data.get("suggestions", [])), 
-                            datetime.datetime.now())
+                        sql = """
+                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions,filename,original_name)
+                            VALUES (%s, %s, %s, %s, %s, %s, CAST(%s AS JSON),%s,%s)
+                        """
+                        params = (
+                            user_id,
+                            score,
+                            datetime.datetime.now(),
+                            strengths_json,
+                            filepath,
+                            suggestions_json,
+                            dimensions_json,
+                            unique_filename,
+                            file.filename
                         )
+                        c.execute(sql, params)
                         conn.commit()
                         # 返回完整的评价信息
                         return jsonify({
                             "message": "上传成功",
-                            "composition": evaluation_data.get("composition", ""),
-                            "line_quality": evaluation_data.get("line_quality", ""),
-                            "shading": evaluation_data.get("shading", ""),
-                            "creativity": evaluation_data.get("creativity", ""),
-                            "overall_score": evaluation_data.get("overall_score", 0),
-                            "strengths": evaluation_data.get("strengths", []),
-                            "suggestions": evaluation_data.get("suggestions", []),
-                            "filename": filename
+                            "overall_score": score,
+                            "dimensions": dimensions,
+                            "strengths": strengths,
+                            "suggestions": suggestions,
+                            "filename": file.filename
                         }), 200
-                    else:
-                        if os.path.exists(filepath):
-                            os.remove(filepath)
                 finally:
                     conn.close()
             except Exception as ai_api_error:
                 #API调用失败
-                if os.path.exists(filepath):
-                    os.remove(filepath)
                 return jsonify({
                     "message":"作品评价失败",
                     "error":str(ai_api_error),
@@ -171,7 +201,7 @@ def get_history():
                 
                 # 获取用户上传的图片历史
                 c.execute(
-                    "SELECT id, original_name, filename, score, strengths, improvements, upload_time FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -182,13 +212,13 @@ def get_history():
                 for img in images:
                     result.append({
                         "id": img['id'],
-                        "original_name": img['original_name'],
-                        "filename": img['filename'],
                         "score": img['score'],
                         "strengths": json.loads(img['strengths']) if img['strengths'] else [],
-                        "improvements": json.loads(img['improvements']) if img['improvements'] else [],
+                        "suggestions": json.loads(img['suggestions']) if img['suggestions'] else [],
+                        "dimensions": img['dimensions'],
                         "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time'],
-                        "image_url": f"/image/file/{img['filename']}"
+                        "image_url": img['image_url'],
+                        "original_name": img['original_name']
                     })
       
                 return jsonify({"images": result}), 200

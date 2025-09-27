@@ -150,7 +150,7 @@ function App() {
       setEvaluation({
         score: record.score,
         strengths: record.strengths,
-        improvements: record.improvements,
+        suggestions: record.suggestions,
         filename: record.original_name
       });
       
@@ -325,12 +325,12 @@ function App() {
                         </div>
                       )}
                       
-                      {evaluation.improvements && evaluation.improvements.length > 0 && (
-                        <div className="improvements">
+                      {evaluation.suggestions && evaluation.suggestions.length > 0 && (
+                        <div className="suggestions">
                           <h4>改进建议：</h4>
                           <ul>
-                            {evaluation.improvements.map((improvement: string, index: number) => (
-                              <li key={index}>{improvement}</li>
+                            {evaluation.suggestions.map((suggestion: string, index: number) => (
+                              <li key={index}>{suggestion}</li>
                             ))}
                           </ul>
                         </div>
