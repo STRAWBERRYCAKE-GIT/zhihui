@@ -23,35 +23,39 @@ function App() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // 立即显示本地预览（在评价生成前就可看到图片）
+      try {
+        // 释放上一个预览（若是 object URL）
+        if (selectedImage && selectedImage.startsWith('blob:')) {
+          try { URL.revokeObjectURL(selectedImage); } catch {}
+        }
+      } catch {}
+      const previewUrl = URL.createObjectURL(file);
+      setSelectedImage(previewUrl);
+      setEvaluation(null); // 清空旧的评价，显示“正在生成评价...”
       setUploading(true);
       setError(null);
-      
+
       try {
-        // 创建FormData对象
         const formData = new FormData();
         formData.append('file', file);
-        
-        // 调用后端API上传图片并获取评价
+
+        // 后端上传（token 由拦截器添加）
         const response = await axios.post(
           'http://localhost:5000/image/upload',
           formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-              // token会由AuthProvider的拦截器自动添加
-            }
-          }
+          { headers: { 'Content-Type': 'multipart/form-data' } }
         );
         
         // 保存评价数据
         setEvaluation(response.data);
         
-        // 显示上传的图片
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setSelectedImage(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+        // // 显示上传的图片
+        // const reader = new FileReader();
+        // reader.onloadend = () => {
+        //   setSelectedImage(reader.result as string);
+        // };
+        // reader.readAsDataURL(file);
         
         // 新增：上传成功后刷新历史记录
         await loadHistoryRecords();
@@ -224,7 +228,7 @@ function App() {
                               {thumbnails[record.id || record.filename] ? (
                                 <img 
                                   src={thumbnails[record.id || record.filename]} 
-                                  alt={record.original_name || `历史${index + 1}`}
+                                  alt={record.filename || `历史${index + 1}`}
                                   className="thumbnail-image"
                                 />
                               ) : (
@@ -233,7 +237,7 @@ function App() {
                             </div>
                             {/* 保留文件名显示 */}
                             <div className="history-filename">
-                              {record.original_name || `历史${index + 1}`}
+                              {record.filename || `历史${index + 1}`}
                             </div>
                           </div>
                         ))

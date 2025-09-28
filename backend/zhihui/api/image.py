@@ -114,19 +114,19 @@ def upload_image():
                         # 返回完整的评价信息
                         return jsonify({
                             "message": "上传成功",
-                            "overall_score": score,
+                            "score": score,
                             "dimensions": dimensions,
                             "strengths": strengths,
                             "suggestions": suggestions,
-                            "filename": file.filename
+                            "filename": unique_filename,
+                            "original_name": file.filename,
                         }), 200
                 finally:
                     conn.close()
-            except Exception as ai_api_error:
-                #API调用失败
+            except Exception as e:
                 return jsonify({
                     "message":"作品评价失败",
-                    "error":str(ai_api_error),
+                    "error":str(e),
                     "suggestion":"请稍后重试或联系管理员"
                 }),500
 
@@ -201,7 +201,7 @@ def get_history():
                 
                 # 获取用户上传的图片历史
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions,original_name FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -218,7 +218,8 @@ def get_history():
                         "dimensions": img['dimensions'],
                         "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time'],
                         "image_url": img['image_url'],
-                        "original_name": img['original_name']
+                        "filename": img['filename'],
+                        "original_name": img['original_name'],
                     })
       
                 return jsonify({"images": result}), 200
