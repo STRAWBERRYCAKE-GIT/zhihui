@@ -35,23 +35,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState(!!token);
 
   // 添加请求拦截器，自动添加token
-  useEffect(() => {
-    const requestInterceptor = axios.interceptors.request.use(
-      (config) => {
-        if (token && config.url && config.url.startsWith('http://localhost:5000')) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
+useEffect(() => {
+  console.log('🔧 AuthProvider useEffect 执行');
+  
+  // 设置基础URL
+  axios.defaults.baseURL = 'http://localhost:5000';
+  const requestInterceptor = axios.interceptors.request.use(
+    (config) => {
+      
+      const currentToken = localStorage.getItem('token');
+      
+      if (currentToken) {
+        config.headers.Authorization = `Bearer ${currentToken}`;
+      } else {
+        console.log('❌ 拦截器没有找到token');
       }
-    );
-
-    return () => {
-      axios.interceptors.request.eject(requestInterceptor);
-    };
-  }, [token]);
+      
+      return config;
+    },
+    (error) => {
+      console.error('❌ 拦截器错误:', error);
+      return Promise.reject(error);
+    }
+  );
+  
+  return () => {
+    axios.interceptors.request.eject(requestInterceptor);
+  };
+}, []); // 空依赖数组，只在挂载时执行一次
 
   const login = (newToken: string, newUser: User) => {
     setToken(newToken);

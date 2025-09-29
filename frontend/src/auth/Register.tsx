@@ -25,8 +25,6 @@ const Register: React.FC = () => {
     }
     
     try {
-      // 设置axios基础URL
-      axios.defaults.baseURL = 'http://localhost:5000';
       
       // 发送注册请求 - 调用正确的API端点并传递所有必要参数
       const response = await axios.post('/user/signin', {

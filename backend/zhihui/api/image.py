@@ -91,8 +91,13 @@ def upload_image():
                     user = c.fetchone()
                 
                     if user:
+                        try:
+                            file.stream.seek(0)
+                        except Exception:
+                            pass
                         file.save(filepath)
                         user_id = user['id']
+                        image_url = f"/image/file/{unique_filename}"
                         # 保存图片信息和评价到数据库
                         sql = """
                             INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions,filename,original_name)
@@ -103,7 +108,7 @@ def upload_image():
                             score,
                             datetime.datetime.now(),
                             strengths_json,
-                            filepath,
+                            image_url,
                             suggestions_json,
                             dimensions_json,
                             unique_filename,
@@ -201,7 +206,7 @@ def get_history():
                 
                 # 获取用户上传的图片历史
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions,original_name FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions,filename,original_name FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()

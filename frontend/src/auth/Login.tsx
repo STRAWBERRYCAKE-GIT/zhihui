@@ -14,8 +14,6 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // 设置axios基础URL以便正确连接后端
-      axios.defaults.baseURL = 'http://localhost:5000';
       
       const response = await axios.post('/user/login', {
         username,
@@ -24,6 +22,7 @@ const Login: React.FC = () => {
       
       // 使用AuthProvider中的login方法
       login(response.data.token, response.data.user);
+      //login(response.data.user, response.data.token);
       
       // 登录成功后跳转到评价系统页面
       navigate('/');

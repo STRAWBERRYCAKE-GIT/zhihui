@@ -12,14 +12,15 @@ function App() {
   const [uploading, setUploading] = useState<boolean>(false);
   const [evaluation, setEvaluation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  // 新增：历史记录状态
+  // 历史记录状态
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
-  // 新增：存储每个历史记录项的缩略图数据
+  // 存储每个历史记录项的缩略图数据
   const [thumbnails, setThumbnails] = useState<{ [key: string]: string }>({});
-  // 新增：存储正在加载的缩略图ID，避免重复加载
+  // 存储正在加载的缩略图ID，避免重复加载
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
 
+  // 图片上传处理函数
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -42,7 +43,7 @@ function App() {
 
         // 后端上传（token 由拦截器添加）
         const response = await axios.post(
-          'http://localhost:5000/image/upload',
+          '/image/upload',
           formData,
           { headers: { 'Content-Type': 'multipart/form-data' } }
         );
@@ -50,22 +51,30 @@ function App() {
         // 保存评价数据
         setEvaluation(response.data);
         
-        // // 显示上传的图片
-        // const reader = new FileReader();
-        // reader.onloadend = () => {
-        //   setSelectedImage(reader.result as string);
-        // };
-        // reader.readAsDataURL(file);
-        
-        // 新增：上传成功后刷新历史记录
         await loadHistoryRecords();
         
       } catch (err: any) {
-        // 处理错误
-        setError(err.response?.data?.message || '上传失败，请稍后重试');
-        console.error('上传错误:', err);
-      } finally {
-        setUploading(false);
+        let errorMessage = '上传失败，请稍后重试';
+        
+        if (err.code === 'NETWORK_ERROR' || !err.response) {
+          errorMessage = '网络连接失败，请检查网络';
+        } else if (err.code === 'TIMEOUT') {
+          errorMessage = '请求超时，请稍后重试';
+        } else if (err.response?.status === 413) {
+          errorMessage = '文件太大，请选择较小的图片';
+        } else if (err.response?.status === 401) {
+          errorMessage = '登录已过期，请重新登录';
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        }
+        
+        setError(errorMessage);
+        
+        // 上传失败时清除本地预览
+        if (selectedImage && selectedImage.startsWith('blob:')) {
+          URL.revokeObjectURL(selectedImage);
+          setSelectedImage(null);
+        }
       }
     }
   };
@@ -86,7 +95,8 @@ function App() {
     
     setLoadingHistory(true);
     try {
-      const response = await axios.get('http://localhost:5000/image/history');
+    
+      const response = await axios.get('/image/history');
       setHistoryRecords(response.data.images);
       // 重置缩略图状态
       setThumbnails({});
@@ -94,9 +104,16 @@ function App() {
       // 成功获取历史记录时清除错误状态
       setError(null);
     } catch (err: any) {
-      console.error;
-      // 提供更详细的错误信息
-      setError;
+      console.error('加载历史记录失败:', err);
+      let errorMessage = '加载历史记录失败';
+      
+      if (err.response?.status === 401) {
+        errorMessage = '登录已过期，请重新登录';
+      } else if (err.response?.status === 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoadingHistory(false);
     }
@@ -116,7 +133,7 @@ function App() {
     
     try {
       // 使用axios获取图片数据
-      const response = await axios.get(`http://localhost:5000${record.image_url}`, {
+      const response = await axios.get(`${record.image_url}`, {
         responseType: 'blob',
         timeout: 5000 // 缩略图加载可以设置较短的超时时间
       });
@@ -141,7 +158,7 @@ function App() {
       setEvaluation(null);
       
       // 使用axios获取图片数据并确保携带token
-      const response = await axios.get(`http://localhost:5000${record.image_url}`, {
+      const response = await axios.get(`${record.image_url}`, {
         responseType: 'blob',
         timeout: 10000 // 添加超时设置
       });
@@ -170,6 +187,7 @@ function App() {
     }
   };
 
+  
   // 新增：组件挂载时加载历史记录
   useEffect(() => {
     if (isAuthenticated) {
@@ -178,17 +196,29 @@ function App() {
   }, [isAuthenticated]);
 
   // 新增：用户对象变化时也重新加载历史记录（确保是同一个用户）
-  // 在useEffect钩子中增加用户状态变化的依赖项
   useEffect(() => {
-    if (isAuthenticated && user) {
-    // 清除当前所有历史记录数据
-    setHistoryRecords([]);
-    setThumbnails({});
-    setLoadingThumbnails(new Set());
-    // 强制重新加载历史记录
-    loadHistoryRecords();
+    if (isAuthenticated && user?.id) { // 使用具体的用户ID而不是整个user对象
+      // 只有在用户ID变化时才重新加载
+      setHistoryRecords([]);
+      setThumbnails({});
+      setLoadingThumbnails(new Set());
+      loadHistoryRecords();
     }
-  }, [isAuthenticated, user]); // 确保user对象变化时也会重新加载
+  }, [isAuthenticated, user?.id]); // 只依赖用户ID
+
+  useEffect(() => {
+  return () => {
+    // 组件卸载时释放所有 Object URL
+    if (selectedImage && selectedImage.startsWith('blob:')) {
+      URL.revokeObjectURL(selectedImage);
+    }
+    Object.values(thumbnails).forEach(url => {
+      if (typeof url === 'string' && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+  };
+}, [selectedImage, thumbnails]);
 
   return (
     <Routes>
