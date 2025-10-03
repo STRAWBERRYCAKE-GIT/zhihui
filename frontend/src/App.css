@@ -1,51 +1,3 @@
-/* 登录和注册页面样式 */
-.login-container, .register-container {
-  max-width: 400px;
-  margin: 100px auto;
-  padding: 30px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: 600;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 16px;
-}
-
-.form-group small {
-  color: #666;
-  font-size: 12px;
-}
-
-.error-message {
-  color: #e74c3c;
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: #fadbd8;
-  border-radius: 5px;
-}
-
-/* 用户信息样式 */
-.user-info {
-  text-align: right;
-  margin-bottom: 20px;
-  font-weight: 600;
-}
-
 /* 全局样式重置 */
 * {
   margin: 0;
@@ -55,11 +7,25 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f5;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+:root {
+  --sidebar-w: 120px;
+  --content-max-w: 900px;
+  --score-panel-min: 320px;
+  --score-panel-ideal: 28vw;
+  --score-panel-max: 480px;
+  --page-padding: 30px;
 }
 
 /* 主容器 */
@@ -68,80 +34,43 @@ body {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 左侧导航栏 */
-/* 确保退出按钮在底部 */
 .sidebar {
-  width: 120px;
-  background: linear-gradient(180deg, #FF6B6B 0%, #FFA571 100%);
+  width: 150px;
+  background: linear-gradient(
+    50deg,
+    #FFE090 0%,
+    #FFA571 20%,
+    #FF6B6B 60%,
+    #FF7A8C 80%,
+    #b58fce 90%,
+    #8AAADC 100%
+  );
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 20px 0;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  border-radius: 20px; 
+  overflow: hidden;
 }
 
-.sidebar-buttons {
-  flex: 1; /* 让中间内容占据剩余空间，使退出按钮自然位于底部 */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-/* 增大上传图片的框 */
-/* 增大上传前的占位框 */
-.upload-placeholder {
-  width: 800px; 
-  height: 600px; 
-  border: 2px dashed #FFB59E;
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 30px;
-  background-color: #FFF8F5;
-  transition: all 0.3s ease;
-}
-
-/* 同时增大上传后的图片显示框 */
-.uploaded-image {
-  width: 800px; 
-  height: 600px; 
-  object-fit: contain;
-  border-radius: 20px;
-  margin-bottom: 30px;
-  border: 2px solid #FFB59E;
-}
-
-/* 调整上传图标大小以适应更大的框 */
-.upload-icon svg {
-  width: 100px;
-  height: 100px; 
-}
-
-/* 可以考虑调整上传文字大小 */
-.upload-text {
-  color: #FFB59E;
-  font-size: 20px; 
-}
-
-/* 增加右侧栏宽度 */
-.score-panel {
-  width: 800px; /* 从350px增加到450px */
-  background-color: white;
-  border-left: 1px solid #E0E0E0;
-  padding: 30px;
-  display: flex;
-  flex-direction: column;
-}
 .logo {
   font-size: 24px;
   font-weight: bold;
   color: white;
   margin-bottom: 40px;
+}
+
+.dots {
+  color: white;
+  margin-bottom: 30px;
+  cursor: pointer;
 }
 
 .plus-button {
@@ -156,11 +85,11 @@ body {
   margin-bottom: 30px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  display: flex; /* 添加flex布局 */
-  align-items: center; /* 垂直居中 */
-  justify-content: center; /* 水平居中 */
-  line-height: 1; /* 确保行高不会影响居中效果 */
-  padding: 0; /* 移除可能存在的内边距 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
 }
 
 .plus-button:hover {
@@ -168,113 +97,14 @@ body {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* 清理重复的样式定义，并添加缩略图相关样式 */
-
-/* 历史记录区域样式（合并后的完整定义） */
-
-.history-section {
+.sidebar-buttons {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
-  margin-bottom: auto;
   width: 100%;
-  max-height: 600px; /* 从400px增加到600px，使滚动条更长 */
-  overflow-y: auto;
-  padding: 10px 0;
-  scrollbar-width: thin; 
-  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1); 
 }
 
-/* 美化滚动条 */
-.history-section::-webkit-scrollbar {
-  width: 3px;
-}
-
-.history-section::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.history-section::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-}
-
-/* 历史记录项样式（修改为支持缩略图） */
-
-.history-filename {
-  display: none; /* 隐藏文件名 */
-}
-
-
-.history-item {
-  width: 80px;
-  padding: 8px;
-  margin: 5px 0;
-  text-align: center;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 5px;
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0; /* 移除与隐藏文件名之间的间距 */
-}
-
-
-.history-thumbnail {
-  width: 100%;
-  height: 65px; /* 略微增加缩略图高度 */
-  overflow: hidden;
-  border-radius: 3px;
-  background-color: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-/* 缩略图图片样式 */
-.thumbnail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* 缩略图占位符样式 */
-.thumbnail-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* 确保历史记录项点击区域完整 */
-.history-item {
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-}
-
-/* 历史记录文件名样式 */
-.history-filename {
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
-}
-
-/* 修复退出按钮样式 */
 .exit-button {
   width: 70px;
   height: 50px;
@@ -291,50 +121,25 @@ body {
   justify-content: center;
 }
 
-/* 图片显示区域样式 */
-.image-with-name {
+.exit-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 历史记录区域样式 */
+.history-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 30px;
-}
-
-/* 图片文件名显示样式 */
-.image-filename {
-  font-size: 14px;
-  color: #666;
-  text-align: center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 移除重复的样式定义 */
-/* 注意：如果文件中仍有其他重复的.history-section或.exit-button样式，请删除它们 */
-.loading-history {
-  color: white;
-  font-size: 14px;
-  padding: 10px;
-}
-
-.no-history {
-  color: white;
-  font-size: 12px;
-  padding: 10px;
-  text-align: center;
-  opacity: 0.7;
-}
-
-/* 确保history-section可以滚动 */
-.history-section {
+  gap: 15px;
+  margin-bottom: auto;
   width: 100%;
+  max-height: 600px;
   overflow-y: auto;
   padding: 10px 0;
+  scrollbar-width: thin; 
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1); 
 }
 
-/* 美化滚动条 */
 .history-section::-webkit-scrollbar {
   width: 3px;
 }
@@ -349,30 +154,76 @@ body {
   border-radius: 3px;
 }
 
-.dots {
-  color: white;
-  margin-bottom: 30px;
-  cursor: pointer;
-}
-
-exit-button {
-  width: 70px; /* 保持现有宽度或增加到80-90px以确保文字水平显示 */
-  height: 50px;
-  border-radius: 10px;
+.history-item {
+  width: 80px;
+  padding: 8px;
+  margin: 5px 0;
+  text-align: center;
   background-color: rgba(255, 255, 255, 0.2);
-  border: none;
+  border-radius: 5px;
   color: white;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-size: 14px; /* 调整字体大小以确保文字在现有宽度内水平显示 */
-  white-space: nowrap; /* 防止文字自动换行 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.history-filename {
+  display: none;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.history-thumbnail {
+  width: 100%;
+  height: 65px;
+  overflow: hidden;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
-.exit-button:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+.thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.loading-history {
+  color: white;
+  font-size: 14px;
+  padding: 10px;
+}
+
+.no-history {
+  color: white;
+  font-size: 12px;
+  padding: 10px;
+  text-align: center;
+  opacity: 0.7;
 }
 
 /* 主内容区 */
@@ -381,6 +232,7 @@ exit-button {
   padding: 30px;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 
 .section-title {
@@ -398,11 +250,41 @@ exit-button {
   justify-content: center;
 }
 
-.upload-placeholder,
-.uploaded-image {
-  width: 90%; /* 使用百分比宽度 */
-  max-width: 900px; /* 设置最大宽度 */
-  height: 600px; /* 或使用固定高度 */
+.image-with-name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.image-filename {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-placeholder {
+  width: 800px;
+  height: 600px;
+  border: 2px dashed #FFB59E;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  background-color: #FFF8F5;
+  transition: all 0.3s ease;
+  width: min(90vw, var(--content-max-w));
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  max-height: calc(100dvh - 280px);
 }
 
 .upload-placeholder:hover {
@@ -410,11 +292,35 @@ exit-button {
   border-color: #FF9E7A;
 }
 
+.uploaded-image {
+  width: 800px;
+  height: 600px;
+  object-fit: contain;
+  border-radius: 20px;
+  margin-bottom: 30px;
+  border: 2px solid #FFB59E;
+  width: 500px;
+  height: 400px;
+  width: min(90vw, var(--content-max-w));
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  max-height: calc(100dvh - 280px);
+  object-fit: contain;
+}
+
 .upload-icon {
   margin-bottom: 20px;
 }
 
+.upload-icon svg {
+  width: 100px;
+  height: 100px; 
+}
+
 .upload-text {
+  color: #FFB59E;
+  font-size: 20px;
   color: #FFB59E;
   font-size: 18px;
 }
@@ -424,6 +330,12 @@ exit-button {
   flex-direction: column;
   align-items: center;
   gap: 15px;
+  position: sticky;
+  bottom: 0;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
+  backdrop-filter: saturate(120%) blur(4px);
+  z-index: 10;
 }
 
 .upload-button {
@@ -455,23 +367,20 @@ exit-button {
   font-size: 14px;
 }
 
-.uploaded-image {
-  width: 500px;
-  height: 400px;
-  object-fit: contain;
-  border-radius: 20px;
-  margin-bottom: 30px;
-  border: 2px solid #FFB59E;
-}
-
 /* 右侧评分面板 */
 .score-panel {
-  width: 500px; 
+  width: 800px;
   background-color: white;
   border-left: 1px solid #E0E0E0;
   padding: 30px;
   display: flex;
   flex-direction: column;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 500px;
+  border-radius: 20px;
+  width: clamp(var(--score-panel-min), var(--score-panel-ideal), var(--score-panel-max));
 }
 
 .score-title {
@@ -549,75 +458,30 @@ exit-button {
   font-size: 16px;
 }
 
-/* 修复：缺失的 .exit-button 基础样式（原先误写为 exit-button 无点） */
-.exit-button {
-  width: 70px;
-  height: 50px;
+/* 登录和注册页面样式 */
+.login-container, .register-container {
+  max-width: 400px;
+  margin: 100px auto;
+  padding: 30px;
+  background: white;
   border-radius: 10px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 14px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
-/* =================== 响应式与兼容性修复（追加覆盖） =================== */
-:root {
-  --sidebar-w: 120px;
-  --content-max-w: 900px;
-  --score-panel-min: 320px;
-  --score-panel-ideal: 28vw;
-  --score-panel-max: 480px;
-  --page-padding: 30px;
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+.form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+.form-group small { color: #666; font-size: 12px; }
+.error-message { color: #e74c3c; margin-bottom: 15px; padding: 10px; background-color: #fadbd8; border-radius: 5px; }
+
+/* 用户信息样式 */
+.user-info {
+  text-align: right;
+  margin-bottom: 20px;
+  font-weight: 600;
 }
 
-/* 1) 使用 dvh 避免移动端/不同浏览器对 100vh 的差异，同时让页面可纵向滚动 */
-.app-container {
-  height: 100dvh;
-  width: 100%;
-}
-
-/* 2) 主内容可滚动，防止因固定高度导致底部按钮被裁切 */
-.main-content {
-  overflow-y: auto;
-}
-
-/* 3) 统一中间画布区域与图片区域的尺寸策略，避免固定像素在不同缩放下变形或溢出 */
-.upload-placeholder,
-.uploaded-image {
-  width: min(90vw, var(--content-max-w));
-  max-width: 100%;
-  aspect-ratio: 4 / 3; /* 保持稳定比例 */
-  height: auto; /* 随宽度自适应 */
-  max-height: calc(100dvh - 280px); /* 预留顶部标题、底部按钮空间，避免溢出 */
-}
-
-/* 旧规则中对 .uploaded-image 的固定宽高覆盖为上面自适应策略 */
-.uploaded-image {
-  object-fit: contain;
-}
-
-/* 4) 右侧评分面板采用 clamp 保持跨分辨率一致的宽度表现 */
-.score-panel {
-  width: clamp(var(--score-panel-min), var(--score-panel-ideal), var(--score-panel-max));
-}
-
-/* 5) 底部上传按钮容器吸附在可视区域底部，避免滚动时被遮挡/消失 */
-.upload-button-container {
-  position: sticky;
-  bottom: 0;
-  padding: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
-  backdrop-filter: saturate(120%) blur(4px);
-  z-index: 10; /* 确保不被图片覆盖 */
-}
-
-/* 6) 小屏优化：减小侧栏和内边距，确保主要内容留白充足 */
+/* 响应式设计 */
 @media (max-width: 1024px) {
   .sidebar {
     width: 96px;
@@ -645,32 +509,4 @@ exit-button {
     width: 100%;
     justify-content: center;
   }
-}
-
-/* 7) 防止水平溢出导致页面缩放异常 */
-html, body {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-/* 添加缩略图占位符样式 */
-.thumbnail-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* 确保历史记录项点击区域完整 */
-.history-item {
-  cursor: pointer;
-  /* 确保完整的点击区域 */
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
 }

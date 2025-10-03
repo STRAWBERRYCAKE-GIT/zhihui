@@ -1,3 +1,5 @@
+# 更新
+
 images表有修改
 
 ```
@@ -6,6 +8,12 @@ ALTER TABLE zhihui_db.images DROP COLUMN evaluation;
 ALTER TABLE zhihui_db.images DROP COLUMN improvements;
 ALTER TABLE zhihui_db.images ADD suggestions TEXT NULL;
 ALTER TABLE zhihui_db.images ADD dimensions json NULL;
+```
+
+增加雷达图
+
+```
+npm install chart.js react-chartjs-2
 ```
 
 # 项目介绍

@@ -5,6 +5,8 @@ import Login from './auth/Login';
 import Register from './auth/Register';
 import './App.css';
 import axios from 'axios';
+import RadarChart, { Dimension } from './components/RadarChart';
+import DimensionDetail from './components/DimensionDetail';
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -19,6 +21,8 @@ function App() {
   const [thumbnails, setThumbnails] = useState<{ [key: string]: string }>({});
   // 存储正在加载的缩略图ID，避免重复加载
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
+  // 选中的维度状态
+  const [selectedDimension, setSelectedDimension] = useState<Dimension | null>(null);
 
   // 图片上传处理函数
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +38,7 @@ function App() {
       const previewUrl = URL.createObjectURL(file);
       setSelectedImage(previewUrl);
       setEvaluation(null); // 清空旧的评价，显示“正在生成评价...”
+      setSelectedDimension(null);
       setUploading(true);
       setError(null);
 
@@ -88,8 +93,8 @@ function App() {
     logout(); // 调用AuthProvider中的logout函数清除认证状态
   };
 
-  // 新增：加载历史记录函数
-  // 修改：加载历史记录函数，添加更详细的错误信息
+ 
+  // 加载历史记录函数
   const loadHistoryRecords = async () => {
     if (!isAuthenticated) return;
     
@@ -151,12 +156,12 @@ function App() {
     }
   };
 
-  // 修改：点击历史记录项函数，优化错误处理
+  // 点击历史记录项函数，优化错误处理
   const handleHistoryItemClick = async (record: any) => {
     try {
       // 先显示加载状态
       setEvaluation(null);
-      
+      setSelectedDimension(null)
       // 使用axios获取图片数据并确保携带token
       const response = await axios.get(`${record.image_url}`, {
         responseType: 'blob',
@@ -168,10 +173,30 @@ function App() {
       
       // 设置当前选中的图片和评价
       setSelectedImage(imageUrl);
+      // 构建评价数据，确保 dimensions 是数组格式
+      let dimensionsData = record.dimensions;
+      
+      // 如果 dimensions 是字符串，尝试解析为 JSON
+      if (typeof dimensionsData === 'string') {
+        try {
+          dimensionsData = JSON.parse(dimensionsData);
+        } catch (parseError) {
+          console.error('解析 dimensions JSON 失败:', parseError);
+          dimensionsData = [];
+        }
+      }
+      
+      // 确保 dimensions 是数组
+      if (!Array.isArray(dimensionsData)) {
+        console.warn('dimensions 不是数组格式:', dimensionsData);
+        dimensionsData = [];
+      }
+    
       setEvaluation({
         score: record.score,
         strengths: record.strengths,
         suggestions: record.suggestions,
+        dimensions: dimensionsData,
         filename: record.original_name
       });
       
@@ -187,8 +212,17 @@ function App() {
     }
   };
 
-  
-  // 新增：组件挂载时加载历史记录
+  // 处理维度点击
+  const handleDimensionClick = (dimension: Dimension) => {
+    setSelectedDimension(dimension);
+  };
+
+  // 处理返回
+  const handleBackFromDetail = () => {
+    setSelectedDimension(null);
+  };
+
+  // 组件挂载时加载历史记录
   useEffect(() => {
     if (isAuthenticated) {
       loadHistoryRecords();
@@ -238,6 +272,8 @@ function App() {
                     onClick={() => {
                       setSelectedImage(null);
                       setEvaluation(null);
+                      setSelectedDimension(null);
+                      setError(null);
                     }}
                   >+</button>
                   <div className="history-section">
@@ -341,33 +377,48 @@ function App() {
                 <div className="score-content">
                   {evaluation ? (
                     <> 
-                      <div className="overall-score">
-                        <div className="score-number">{evaluation.score}</div>
-                        <div className="score-label">综合评分</div>
-                      </div>
-                      
-
-                      
-                      {evaluation.strengths && evaluation.strengths.length > 0 && (
-                        <div className="strengths">
-                          <h4>优点：</h4>
-                          <ul>
-                            {evaluation.strengths.map((strength: string, index: number) => (
-                              <li key={index}>{strength}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {evaluation.suggestions && evaluation.suggestions.length > 0 && (
-                        <div className="suggestions">
-                          <h4>改进建议：</h4>
-                          <ul>
-                            {evaluation.suggestions.map((suggestion: string, index: number) => (
-                              <li key={index}>{suggestion}</li>
-                            ))}
-                          </ul>
-                        </div>
+                      {selectedDimension ? (
+                        <DimensionDetail 
+                          dimension={selectedDimension} 
+                          onBack={handleBackFromDetail}
+                        />
+                      ) : (
+                        <>
+                          <div className="overall-score">
+                            <div className="score-number">{evaluation.score}</div>
+                            <div className="score-label">综合评分</div>
+                          </div>
+                          
+                          {/* 使用雷达图组件 */}
+                          {evaluation.dimensions && evaluation.dimensions.length > 0 && (
+                            <RadarChart 
+                              dimensions={evaluation.dimensions}
+                              onDimensionClick={handleDimensionClick}
+                            />
+                          )}
+                          
+                          {evaluation.strengths && evaluation.strengths.length > 0 && (
+                            <div className="strengths">
+                              <h4>优点：</h4>
+                              <ul>
+                                {evaluation.strengths.map((strength: string, index: number) => (
+                                  <li key={index}>{strength}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {evaluation.suggestions && evaluation.suggestions.length > 0 && (
+                            <div className="suggestions">
+                              <h4>改进建议：</h4>
+                              <ul>
+                                {evaluation.suggestions.map((suggestion: string, index: number) => (
+                                  <li key={index}>{suggestion}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   ) : selectedImage ? (
