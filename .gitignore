@@ -46,6 +46,7 @@ frontend/dist/
 frontend/build/
 
 # 特定IDE文件
+.vs/
 .vscode/
 .idea/
 *.swp
