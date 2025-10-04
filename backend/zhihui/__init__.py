@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 from datetime import timedelta
 import os
 
@@ -20,6 +21,9 @@ def create_app():
 
 
     jwt = JWTManager(app)
+    
+    # 配置CORS
+    CORS(app, origins=['http://localhost:5173'], supports_credentials=True)
     
     #导入蓝图
     from .api.user import user_bp

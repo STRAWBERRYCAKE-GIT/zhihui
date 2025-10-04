@@ -34,13 +34,37 @@ interface RadarChartProps {
 }
 
 const RadarChart: React.FC<RadarChartProps> = ({ dimensions, onDimensionClick }) => {
+  // 添加调试信息
+  console.log('RadarChart received dimensions:', dimensions);
+  
+  // 数据验证和清理
+  const validDimensions = dimensions.filter(dim => 
+    dim && 
+    typeof dim === 'object' && 
+    typeof dim.name === 'string' && 
+    typeof dim.raw_score === 'number' &&
+    typeof dim.weighted_score === 'number' &&
+    typeof dim.comment === 'string'
+  );
+
+  // 如果没有有效数据，显示空状态
+  if (validDimensions.length === 0) {
+    return (
+      <div className="radar-container">
+        <div className="radar-chart">
+          <p>暂无评价数据</p>
+        </div>
+      </div>
+    );
+  }
+
   // 准备雷达图数据
   const data = {
-    labels: dimensions.map((dim) => dim.name),
+    labels: validDimensions.map((dim) => dim.name),
     datasets: [
       {
         label: '得分',
-        data: dimensions.map((dim) => dim.raw_score),
+        data: validDimensions.map((dim) => dim.raw_score),
         backgroundColor: 'rgba(255, 122, 69, 0.2)',
         borderColor: 'rgba(255, 122, 69, 1)',
         borderWidth: 2,
@@ -90,7 +114,7 @@ const RadarChart: React.FC<RadarChartProps> = ({ dimensions, onDimensionClick })
     onClick: (evt: any, elements: any) => {
       if (elements.length > 0) {
         const index = elements[0].index;
-        onDimensionClick(dimensions[index]);
+        onDimensionClick(validDimensions[index]);
       }
     },
     // 自定义悬停效果

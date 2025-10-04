@@ -100,8 +100,8 @@ def upload_image():
                         image_url = f"/image/file/{unique_filename}"
                         # 保存图片信息和评价到数据库
                         sql = """
-                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions,filename,original_name)
-                            VALUES (%s, %s, %s, %s, %s, %s, CAST(%s AS JSON),%s,%s)
+                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """
                         params = (
                             user_id,
@@ -110,7 +110,7 @@ def upload_image():
                             strengths_json,
                             image_url,
                             suggestions_json,
-                            dimensions_json,
+                            json.dumps(dimensions, ensure_ascii=False),
                             unique_filename,
                             file.filename
                         )
@@ -220,7 +220,7 @@ def get_history():
                         "score": img['score'],
                         "strengths": json.loads(img['strengths']) if img['strengths'] else [],
                         "suggestions": json.loads(img['suggestions']) if img['suggestions'] else [],
-                        "dimensions": img['dimensions'],
+                        "dimensions": json.loads(img['dimensions']) if img['dimensions'] else [],
                         "upload_time": img['upload_time'].isoformat() if hasattr(img['upload_time'], 'isoformat') else img['upload_time'],
                         "image_url": img['image_url'],
                         "filename": img['filename'],
