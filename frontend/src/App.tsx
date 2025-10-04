@@ -9,6 +9,8 @@ import RadarChart, { Dimension } from './components/RadarChart';
 import DimensionDetail from './components/DimensionDetail';
 import ScoreRing from './components/ScoreRing';
 import ErrorBoundary from './components/ErrorBoundary';
+import ImageBubbles from './components/ImageBubbles';
+import { filterEvaluationText } from './utils/textFilter';
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -25,6 +27,9 @@ function App() {
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
   // 选中的维度状态
   const [selectedDimension, setSelectedDimension] = useState<Dimension | null>(null);
+  // 气泡相关状态
+  const [showBubbles, setShowBubbles] = useState<boolean>(false);
+  const [bubbleSentences, setBubbleSentences] = useState<string[]>([]);
 
   // 图片上传处理函数
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,6 +63,13 @@ function App() {
         // 保存评价数据
         console.log('Upload response data:', response.data);
         setEvaluation(response.data);
+        
+        // 生成气泡文本
+        const sentences = filterEvaluationText(response.data);
+        console.log('原始评价数据:', response.data);
+        console.log('概括化后的气泡文本:', sentences);
+        setBubbleSentences(sentences);
+        setShowBubbles(true);
         
         await loadHistoryRecords();
         
@@ -233,6 +245,23 @@ function App() {
         filename: record.original_name
       });
       
+      // 生成气泡文本
+      const sentences = filterEvaluationText({
+        score: record.score,
+        strengths: strengthsData,
+        suggestions: suggestionsData,
+        dimensions: dimensionsData
+      });
+      console.log('历史记录评价数据:', {
+        score: record.score,
+        strengths: strengthsData,
+        suggestions: suggestionsData,
+        dimensions: dimensionsData
+      });
+      console.log('历史记录概括化后的气泡文本:', sentences);
+      setBubbleSentences(sentences);
+      setShowBubbles(true);
+      
       // 清除任何可能存在的错误
       setError(null);
     } catch (err: any) {
@@ -253,6 +282,11 @@ function App() {
   // 处理返回
   const handleBackFromDetail = () => {
     setSelectedDimension(null);
+  };
+
+  // 切换气泡显示
+  const toggleBubbles = () => {
+    setShowBubbles(!showBubbles);
   };
 
   // 组件挂载时加载历史记录
@@ -351,16 +385,34 @@ function App() {
               </aside>
 
               {/* 主内容区 */}
-              <main className="main-content">
-                <div className="section-title">素描</div>
-                <div className="upload-container">
+           <main className="main-content">
+             <div className="section-title">素描</div>
+             
+             {/* 气泡控制按钮 - 与素描字样同高度，与图片右边缘对齐 */}
+             {selectedImage && bubbleSentences.length > 0 && (
+               <button 
+                 className="bubble-control-btn-aligned"
+                 onClick={toggleBubbles}
+                 title={showBubbles ? "隐藏评价气泡" : "显示评价气泡"}
+               >
+                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                   <circle cx="12" cy="12" r="10"/>
+                   <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                   <line x1="9" y1="9" x2="9.01" y2="9"/>
+                   <line x1="15" y1="9" x2="15.01" y2="9"/>
+                 </svg>
+                 {showBubbles ? '隐藏气泡' : '显示气泡'}
+               </button>
+             )}
+             
+             <div className="upload-container">
                   {selectedImage ? (
-                    // 修改：显示图片时添加文件名
+                    // 修改：显示图片时添加文件名和气泡
                     <div className="image-with-name">
-                      <img 
-                        src={selectedImage} 
-                        alt={evaluation?.filename || "上传的图片"} 
-                        className="uploaded-image"
+                      <ImageBubbles 
+                        imageUrl={selectedImage}
+                        sentences={bubbleSentences}
+                        isVisible={showBubbles}
                       />
                       {evaluation?.filename && (
                         <div className="image-filename">
@@ -374,13 +426,28 @@ function App() {
                         <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#FFB59E" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                           <circle cx="8.5" cy="8.5" r="1.5" />
-                          <polyline points="21 15 16 10 5 21" />
-                          <line x1="17" y1="10" x2="17" y2="21" />
+                          <polyline points="21,15 16,10 5,21" />
                         </svg>
                       </div>
-                      <p className="upload-text">上传图片智绘评分</p>
+                      <div className="upload-text">
+                        <p>拖拽图片到此处或</p>
+                        <button 
+                          className="upload-btn"
+                          onClick={() => document.getElementById('imageInput')?.click()}
+                        >
+                          点击上传
+                        </button>
+                        <input
+                          id="imageInput"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          style={{ display: 'none' }}
+                        />
+                      </div>
                     </div>
                   )}
+                  
                   <div className="upload-button-container">
                     <label htmlFor="image-upload" className="upload-button">
                       <span className="upload-icon-text">📁</span> 上传文件或图片

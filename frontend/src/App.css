@@ -233,6 +233,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: visible;
+  position: relative; /* 确保相对定位，以便按钮绝对定位 */
 }
 
 .section-title {
@@ -248,6 +249,9 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: visible; /* 允许气泡超出容器边界 */
+  position: relative; /* 确保相对定位 */
+  z-index: 1; /* 确保容器有正确的层级 */
 }
 
 .image-with-name {
@@ -702,6 +706,71 @@ html, body {
   font-weight: 600;
 }
 
+/* 气泡控制按钮样式 - 与素描字样同高度，与图片右边缘对齐 */
+.bubble-control-btn-aligned {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FFA571 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(255, 107, 107, 0.3);
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  transform: translateY(0);
+}
+
+.bubble-control-btn-aligned:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.bubble-control-btn-aligned svg {
+  flex-shrink: 0;
+}
+
+/* 气泡控制按钮样式 - 参考视频讲解按钮 */
+.bubble-control-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FFA571 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+  z-index: 30;
+  backdrop-filter: blur(10px);
+}
+
+.bubble-control-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.bubble-control-btn svg {
+  flex-shrink: 0;
+}
+
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .sidebar {
@@ -710,6 +779,20 @@ html, body {
   .main-content {
     padding: 20px;
   }
+  
+  .bubble-control-btn {
+    top: 15px;
+    right: 15px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+       .bubble-control-btn-aligned {
+         top: 0;
+         right: 0;
+         padding: 6px 12px;
+         font-size: 11px;
+       }
 }
 
 @media (max-width: 768px) {
@@ -729,5 +812,44 @@ html, body {
   .upload-button {
     width: 100%;
     justify-content: center;
+  }
+  
+  .bubble-control-btn {
+    top: 10px;
+    right: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+  
+  .bubble-control-btn-sketch {
+    top: 10px;
+    right: 10px;
+    padding: 6px 10px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  
+  .bubble-control-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .bubble-control-btn-sketch svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .bubble-control-btn-aligned {
+    top: 0;
+    right: 0;
+    padding: 6px 10px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  
+  .bubble-control-btn-aligned svg {
+    width: 14px;
+    height: 14px;
   }
 }
