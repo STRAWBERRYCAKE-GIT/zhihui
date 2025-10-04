@@ -534,12 +534,10 @@ function App() {
                           
                           {/* 使用雷达图组件 */}
                           {evaluation.dimensions && evaluation.dimensions.length > 0 && (
-                            <ErrorBoundary>
-                              <RadarChart 
-                                dimensions={evaluation.dimensions}
-                                onDimensionClick={handleDimensionClick}
-                              />
-                            </ErrorBoundary>
+                            <RadarChart 
+                              dimensions={evaluation.dimensions}
+                              onDimensionClick={handleDimensionClick}
+                            />
                           )}
                           
                           {evaluation.strengths && evaluation.strengths.length > 0 && (
