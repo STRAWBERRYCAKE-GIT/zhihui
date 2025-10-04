@@ -30,6 +30,58 @@ function App() {
   // 气泡相关状态
   const [showBubbles, setShowBubbles] = useState<boolean>(false);
   const [bubbleSentences, setBubbleSentences] = useState<string[]>([]);
+  // 拖拽状态
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  // +按钮点击处理函数
+  const handlePlusButtonClick = () => {
+    const fileInput = document.getElementById('imageInput') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.click();
+    }
+  };
+
+  // 拖拽事件处理函数
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        // 创建模拟的文件输入事件
+        const mockEvent = {
+          target: {
+            files: [file]
+          }
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        
+        handleImageUpload(mockEvent);
+      } else {
+        setError('请选择图片文件');
+      }
+    }
+  };
 
   // 图片上传处理函数
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,13 +388,13 @@ function App() {
                 <div className="sidebar-buttons">
                   <button 
                     className="plus-button" 
-                    onClick={() => {
-                      setSelectedImage(null);
-                      setEvaluation(null);
-                      setSelectedDimension(null);
-                      setError(null);
-                    }}
-                  >+</button>
+                    onClick={handlePlusButtonClick}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="6" x2="12" y2="18"/>
+                      <line x1="6" y1="12" x2="18" y2="12"/>
+                    </svg>
+                  </button>
                   <div className="history-section">
                     {loadingHistory ? (
                       <div className="loading-history">加载中...</div>
@@ -421,7 +473,13 @@ function App() {
                       )}
                     </div>
                   ) : (
-                    <div className="upload-placeholder">
+                    <div 
+                      className={`upload-placeholder ${isDragOver ? 'drag-over' : ''}`}
+                      onDragOver={handleDragOver}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
                       <div className="upload-icon">
                         <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#FFB59E" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -430,39 +488,22 @@ function App() {
                         </svg>
                       </div>
                       <div className="upload-text">
-                        <p>拖拽图片到此处或</p>
-                        <button 
-                          className="upload-btn"
-                          onClick={() => document.getElementById('imageInput')?.click()}
-                        >
-                          点击上传
-                        </button>
-                        <input
-                          id="imageInput"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          style={{ display: 'none' }}
-                        />
+                        <p>拖拽图片到此处</p>
                       </div>
                     </div>
                   )}
                   
-                  <div className="upload-button-container">
-                    <label htmlFor="image-upload" className="upload-button">
-                      <span className="upload-icon-text">📁</span> 上传文件或图片
-                      <input 
-                        id="image-upload" 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleImageUpload} 
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                    {uploading && <span className="uploading-text">上传中...</span>}
-                    {error && <span className="error-text">{error}</span>}
-                    {/* 保持错误提示，但现在会在成功时清除 */}
-                  </div>
+                  {uploading && <span className="uploading-text">上传中...</span>}
+                  {error && <span className="error-text">{error}</span>}
+                  
+                  {/* 隐藏的文件输入，供+按钮使用 */}
+                  <input
+                    id="imageInput"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
                 </div>
               </main>
 

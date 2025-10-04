@@ -79,7 +79,6 @@ html, body {
   border-radius: 50%;
   background-color: white;
   border: none;
-  font-size: 32px;
   color: #FF6B6B;
   cursor: pointer;
   margin-bottom: 30px;
@@ -95,6 +94,15 @@ html, body {
 .plus-button:hover {
   transform: scale(1.05);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.plus-button svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sidebar-buttons {
@@ -289,11 +297,20 @@ html, body {
   aspect-ratio: 4 / 3;
   height: auto;
   max-height: calc(100dvh - 280px);
+  cursor: pointer;
 }
 
 .upload-placeholder:hover {
   background-color: #FFF0E8;
   border-color: #FF9E7A;
+  transform: translateY(-2px);
+}
+
+.upload-placeholder.drag-over {
+  background-color: #FFE8E0;
+  border-color: #FF7A45;
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(255, 122, 69, 0.2);
 }
 
 .uploaded-image {
