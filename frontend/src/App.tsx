@@ -382,59 +382,64 @@ function App() {
         element={
           isAuthenticated ? (
             <div className="app-container">
-              {/* 左侧导航栏 */}
-              <aside className="sidebar">
-                <div className="logo">LOGO</div>
-                <div className="sidebar-buttons">
-                  <button 
-                    className="plus-button" 
-                    onClick={handlePlusButtonClick}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="6" x2="12" y2="18"/>
-                      <line x1="6" y1="12" x2="18" y2="12"/>
-                    </svg>
-                  </button>
-                  <div className="history-section">
-                    {loadingHistory ? (
-                      <div className="loading-history">加载中...</div>
-                    ) : (
-                      historyRecords.length > 0 ? (
-                        historyRecords.map((record, index) => (
-                          <div 
-                            key={record.id || index}
-                            className="history-item"
-                            onClick={() => handleHistoryItemClick(record)}
-                            onMouseEnter={() => loadThumbnail(record)} // 鼠标悬停时加载缩略图
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className="history-thumbnail">
-                              {/* 如果已经加载了缩略图，则显示实际图片，否则显示占位符 */}
-                              {thumbnails[record.id || record.filename] ? (
-                                <img 
-                                  src={thumbnails[record.id || record.filename]} 
-                                  alt={record.filename || `历史${index + 1}`}
-                                  className="thumbnail-image"
-                                />
-                              ) : (
-                                <div className="thumbnail-placeholder">🖼️</div>
-                              )}
-                            </div>
-                            {/* 保留文件名显示 */}
-                            <div className="history-filename">
-                              {record.filename || `历史${index + 1}`}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="no-history">暂无历史记录</div>
-                      )
-                    )}
-                  </div>
-                  <div className="dots">...</div>
-                </div>
-                <button className="exit-button" onClick={handleLogout}>退出</button>
-              </aside>
+               {/* 左侧导航栏 */}
+               <aside className="sidebar">
+                 <div className="sidebar-content">
+                   <div className="logo">LOGO</div>
+                   <div className="sidebar-buttons">
+                     <button 
+                       className="plus-button" 
+                       onClick={handlePlusButtonClick}
+                     >
+                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                         <line x1="12" y1="6" x2="12" y2="18"/>
+                         <line x1="6" y1="12" x2="18" y2="12"/>
+                       </svg>
+                     </button>
+                     <div className="history-section">
+                       {loadingHistory ? (
+                         <div className="loading-history">加载中...</div>
+                       ) : (
+                         historyRecords.length > 0 ? (
+                           historyRecords.map((record, index) => (
+                             <div 
+                               key={record.id || index}
+                               className="history-item"
+                               onClick={() => handleHistoryItemClick(record)}
+                               onMouseEnter={() => loadThumbnail(record)} // 鼠标悬停时加载缩略图
+                               style={{ cursor: 'pointer' }}
+                             >
+                               <div className="history-thumbnail">
+                                 {/* 如果已经加载了缩略图，则显示实际图片，否则显示占位符 */}
+                                 {thumbnails[record.id || record.filename] ? (
+                                   <img 
+                                     src={thumbnails[record.id || record.filename]} 
+                                     alt={record.filename || `历史${index + 1}`}
+                                     className="thumbnail-image"
+                                   />
+                                 ) : (
+                                   <div className="thumbnail-placeholder">🖼️</div>
+                                 )}
+                               </div>
+                               {/* 保留文件名显示 */}
+                               <div className="history-filename">
+                                 {record.filename || `历史${index + 1}`}
+                               </div>
+                             </div>
+                           ))
+                         ) : (
+                           <div className="no-history">暂无历史记录</div>
+                         )
+                       )}
+                     </div>
+                   </div>
+                 </div>
+                 
+                 {/* 固定在底部的退出按钮区域 */}
+                 <div className="logout-area">
+                   <button className="exit-button" onClick={handleLogout}>退出</button>
+                 </div>
+               </aside>
 
               {/* 主内容区 */}
            <main className="main-content">
