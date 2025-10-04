@@ -7,6 +7,7 @@ import './App.css';
 import axios from 'axios';
 import RadarChart, { Dimension } from './components/RadarChart';
 import DimensionDetail from './components/DimensionDetail';
+import ScoreRing from './components/ScoreRing';
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -384,10 +385,7 @@ function App() {
                         />
                       ) : (
                         <>
-                          <div className="overall-score">
-                            <div className="score-number">{evaluation.score}</div>
-                            <div className="score-label">综合评分</div>
-                          </div>
+                          <ScoreRing initialScore={evaluation.score} maxScore={100} />
                           
                           {/* 使用雷达图组件 */}
                           {evaluation.dimensions && evaluation.dimensions.length > 0 && (

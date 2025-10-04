@@ -1,0 +1,58 @@
+/* 综合评分容器 */
+.overall-score {
+  text-align: center;
+  padding: 25px;
+  border-radius: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 环形容器 */
+.score-ring-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+/* SVG 容器 */
+.score-ring {
+  width: 100%;
+  height: 100%;
+}
+
+/* 背景环 */
+.ring-background {
+  stroke: #f0f0f0; /* 灰色背景 */
+}
+
+/* 进度环（带动画过渡） */
+.ring-progress {
+  stroke: #FF7A45; /* 橙色进度 */
+  transition: stroke-dashoffset 0.5s ease-in-out; /* 平滑动画 */
+}
+
+/* 分数显示 */
+.score-display {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  text-align: center;
+}
+
+.score-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #FF7A45;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.score-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+  display: block;
+}

@@ -64,6 +64,14 @@ const RadarChart: React.FC<RadarChartProps> = ({ dimensions, onDimensionClick })
         ticks: {
           stepSize: 20,
         },
+        pointLabels: {
+          font: {
+            size: 14, 
+            weight: '600' 
+          },
+          color: '#333',
+          padding: 10
+        }
       },
     },
     plugins: {

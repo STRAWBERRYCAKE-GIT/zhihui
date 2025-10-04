@@ -375,7 +375,7 @@ html, body {
   padding: 30px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100dvh - 80px);
+  max-height: calc(100dvh);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   width: 500px;
@@ -402,24 +402,157 @@ html, body {
   gap: 25px;
 }
 
-.score-item {
+
+/* 雷达图容器样式 */
+.radar-container {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  padding: 15px;
-  background-color: #F8F9FA;
-  border-radius: 10px;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
 }
 
-.score-label {
+.radar-chart {
+  width: 100%;
+  max-width: 400px;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.radar-chart canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.radar-hint {
+  color: #8c8c8c;
+  font-size: 12px;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+  line-height: 1.4;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+}
+
+/* 在文字前添加一个小图标，但保持简洁 */
+.radar-hint::before {
+  content: "※";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 10px;
+  opacity: 0.6;
+  transform: translateY(-1px);
+}
+
+
+/* 优点和改进建议样式 */
+.strengths, .suggestions {
+  background: #F8F9FA;
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid;
+}
+
+.strengths {
+  border-left-color: #52C41A;
+  background: linear-gradient(135deg, #F6FFED 0%, #F0FFE6 100%);
+}
+
+.suggestions {
+  border-left-color: #FA8C16;
+  background: linear-gradient(135deg, #FFF7E6 0%, #FFF2D8 100%);
+}
+
+.strengths h4, .suggestions h4 {
   font-size: 16px;
-  color: #666;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.score-value {
-  font-size: 24px;
+.strengths h4::before {
+  content: "✓";
+  color: #52C41A;
   font-weight: bold;
-  color: #FF6B6B;
+}
+
+.suggestions h4::before {
+  content: "💡";
+  font-size: 14px;
+}
+
+.strengths ul, .suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.strengths li, .suggestions li {
+  padding: 8px 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  position: relative;
+  padding-left: 16px;
+}
+
+.strengths li::before {
+  content: "•";
+  color: #52C41A;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+
+.suggestions li::before {
+  content: "→";
+  color: #FA8C16;
+  position: absolute;
+  left: 0;
+}
+
+/* 加载状态样式 */
+.loading-score {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  color: #999;
+}
+
+.loading-score p {
+  font-size: 16px;
+  margin: 0;
+}
+
+.loading-score::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  border: 2px solid #FF7A45;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .empty-score {
@@ -456,6 +589,94 @@ html, body {
 
 .video-icon {
   font-size: 16px;
+}
+
+/* 维度详情页面样式 */
+.dimension-detail {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 整体内容水平居中 */
+  min-height: 400px;
+}
+
+.dimension-header {
+  display: flex;
+  flex-direction: column; /* 改为垂直排列 */
+  align-items: center; /* 子元素水平居中 */
+  width: 100%;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #F0F0F0;
+  position: relative;
+}
+
+.back-button {
+  align-self: flex-start; /* 返回按钮靠左对齐 */
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px; /* 与维度名称的间距 */
+}
+
+.back-button:hover {
+  background-color: #F5F5F5;
+  color: #333;
+}
+
+.back-button svg {
+  flex-shrink: 0;
+}
+
+.dimension-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+  text-align: center; /* 维度名称居中 */
+  width: 100%; /* 占满宽度确保居中 */
+}
+
+.dimension-score {
+  font-size: 48px;
+  font-weight: 700;
+  color: #FF7A45;
+  text-align: center;
+  margin: 30px 0;
+  text-shadow: 0 2px 4px rgba(255, 122, 69, 0.1);
+}
+
+.dimension-description {
+  background: #F8F9FA;
+  border-radius: 12px;
+  padding: 24px;
+  border-left: 4px solid #FF7A45;
+  width: 100%;
+}
+
+.dimension-description h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 12px 0;
+}
+
+.dimension-description p {
+  color: #666;
+  line-height: 1.6;
+  font-size: 14px;
+  margin: 0 0 16px 0;
 }
 
 /* 登录和注册页面样式 */
