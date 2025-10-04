@@ -56,6 +56,7 @@ function App() {
         );
         
         // 保存评价数据
+        console.log('Upload response data:', response.data);
         setEvaluation(response.data);
         
         await loadHistoryRecords();
@@ -177,6 +178,8 @@ function App() {
       setSelectedImage(imageUrl);
       // 构建评价数据，确保 dimensions 是数组格式
       let dimensionsData = record.dimensions;
+      let strengthsData = record.strengths;
+      let suggestionsData = record.suggestions;
       
       // 如果 dimensions 是字符串，尝试解析为 JSON
       if (typeof dimensionsData === 'string') {
@@ -188,16 +191,44 @@ function App() {
         }
       }
       
-      // 确保 dimensions 是数组
+      // 如果 strengths 是字符串，尝试解析为 JSON
+      if (typeof strengthsData === 'string') {
+        try {
+          strengthsData = JSON.parse(strengthsData);
+        } catch (parseError) {
+          console.error('解析 strengths JSON 失败:', parseError);
+          strengthsData = [];
+        }
+      }
+      
+      // 如果 suggestions 是字符串，尝试解析为 JSON
+      if (typeof suggestionsData === 'string') {
+        try {
+          suggestionsData = JSON.parse(suggestionsData);
+        } catch (parseError) {
+          console.error('解析 suggestions JSON 失败:', parseError);
+          suggestionsData = [];
+        }
+      }
+      
+      // 确保都是数组
       if (!Array.isArray(dimensionsData)) {
         console.warn('dimensions 不是数组格式:', dimensionsData);
         dimensionsData = [];
       }
+      if (!Array.isArray(strengthsData)) {
+        console.warn('strengths 不是数组格式:', strengthsData);
+        strengthsData = [];
+      }
+      if (!Array.isArray(suggestionsData)) {
+        console.warn('suggestions 不是数组格式:', suggestionsData);
+        suggestionsData = [];
+      }
     
       setEvaluation({
         score: record.score,
-        strengths: record.strengths,
-        suggestions: record.suggestions,
+        strengths: strengthsData,
+        suggestions: suggestionsData,
         dimensions: dimensionsData,
         filename: record.original_name
       });
@@ -386,7 +417,7 @@ function App() {
                         />
                       ) : (
                         <>
-                          <ScoreRing initialScore={evaluation.score} maxScore={100} />
+                          <ScoreRing initialScore={Number(evaluation.score) || 0} maxScore={100} />
                           
                           {/* 使用雷达图组件 */}
                           {evaluation.dimensions && evaluation.dimensions.length > 0 && (
@@ -402,8 +433,8 @@ function App() {
                             <div className="strengths">
                               <h4>优点：</h4>
                               <ul>
-                                {evaluation.strengths.map((strength: string, index: number) => (
-                                  <li key={index}>{strength}</li>
+                                {evaluation.strengths.map((strength: any, index: number) => (
+                                  <li key={index}>{typeof strength === 'string' ? strength : String(strength)}</li>
                                 ))}
                               </ul>
                             </div>
@@ -413,8 +444,8 @@ function App() {
                             <div className="suggestions">
                               <h4>改进建议：</h4>
                               <ul>
-                                {evaluation.suggestions.map((suggestion: string, index: number) => (
-                                  <li key={index}>{suggestion}</li>
+                                {evaluation.suggestions.map((suggestion: any, index: number) => (
+                                  <li key={index}>{typeof suggestion === 'string' ? suggestion : String(suggestion)}</li>
                                 ))}
                               </ul>
                             </div>
