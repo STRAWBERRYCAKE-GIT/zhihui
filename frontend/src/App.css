@@ -709,8 +709,8 @@ html, body {
 /* 气泡控制按钮样式 - 与素描字样同高度，与图片右边缘对齐 */
 .bubble-control-btn-aligned {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 40px;
+  right: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -788,8 +788,8 @@ html, body {
   }
   
        .bubble-control-btn-aligned {
-         top: 0;
-         right: 0;
+         top: 16px;
+         right: -16px;
          padding: 6px 12px;
          font-size: 11px;
        }
@@ -841,8 +841,8 @@ html, body {
   }
   
   .bubble-control-btn-aligned {
-    top: 0;
-    right: 0;
+    top: 14px;
+    right: -12px;
     padding: 6px 10px;
     font-size: 10px;
     gap: 4px;
