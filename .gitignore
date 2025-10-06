@@ -97,4 +97,4 @@ coverage.xml
 .pytest_cache/
 
 # 上传的文件目录
-backend/zhihui/uploads/
+backend/zhihui/uploads/backend/dinov3_model/model.safetensors
