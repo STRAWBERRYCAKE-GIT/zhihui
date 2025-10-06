@@ -2,6 +2,7 @@ import base64
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import re
 
 load_dotenv()  # 自动加载 .env 文件
 client = OpenAI(
@@ -98,7 +99,7 @@ def get_prompt(sketch_type="portrait"):
 4. 光影表现（15%）：光源方向、光影层次、立体感表现
 5. 细节刻画（10%）：细节丰富度、表现细腻度
 6. 大气效果（10%）：雾气、光影变化、氛围表现
-7. 艺术表现力（10%）：艺术感染力、风景的表现力、情感传达"""+ base_prompt
+7. 艺术表现力（10%）：艺术感染力、风景的表现力、情感传达""" + base_prompt
     
     elif sketch_type == "bust":
         return """你是一位专业的美术学院素描评审专家，请严格按照中国素描石膏素描等级考试评分标准对提供的素描作品进行专业评价。
@@ -110,11 +111,12 @@ def get_prompt(sketch_type="portrait"):
 4. 立体感（15%）：通过明暗与透视表现石膏像的三维效果
 5. 细节刻画（10%）：细部处理、质感表现（如纹理、表面光滑度等）
 6. 结构描绘（10%）：骨骼与肌肉的结构准确性
-7. 艺术表现力（5%）：石膏像的表现力与艺术感染力"""+ base_prompt
+7. 艺术表现力（5%）：石膏像的表现力与艺术感染力""" + base_prompt
 
 
 # 调用GPT-5并进行评分
 def gpt_api(image_stream, sketch_type="portrait"):
+    import json  # 添加这一行导入json模块
     try:
         # 获取指定的素描评分提示词
         prompt = get_prompt(sketch_type)
@@ -144,8 +146,92 @@ def gpt_api(image_stream, sketch_type="portrait"):
         # 获取评分结果
         output = response.output_text
         print(output)
-        return output 
+        
+        # 提取语义分类关键词
+        try:
+            # 先解析输出结果，确保传递给extract_keywords_from_gpt_response的是dict
+            if isinstance(output, str):
+                try:
+                    output_dict = json.loads(output)
+                except json.JSONDecodeError:
+                    output_dict = {}
+            else:
+                output_dict = output
+            
+            # 提取分类关键词
+            categorized_keywords = extract_keywords_from_gpt_response(output_dict)
+            
+            # 创建一个包含原始评分和分类关键词的综合结果
+            combined_result = {
+                "evaluation": output_dict,
+                "categorized_keywords": categorized_keywords
+            }
+            
+            return combined_result
+        except Exception as e:
+            print(f"提取关键词失败: {e}")
+            # 如果提取关键词失败，返回原始结果
+            return output
 
     except Exception as e:
         print(f"gpt_api 调用错误: {e}")
         return None
+
+
+def extract_keywords_from_gpt_response(response):
+    """从GPT-5的响应中提取关键词并按语义分类"""
+    import json
+    
+    # 定义语义类别和相关关键词
+    SEMANTIC_CATEGORIES = {
+        'hair': ['头发', '发丝', '发型', '发梢', '发色', '刘海', '胡须'],
+        'face': ['脸部', '面部', '五官', '表情', '神态', '肤色', '脸颊', '眼睛', '眉毛', '嘴巴', '鼻子'],
+        'body': ['身体', '身材', '姿态', '姿势', '比例', '结构', '骨骼', '肌肉'],
+        'clothes': ['衣服', '服装', '衣领', '衣袖', '衣扣', '衣摆', '服饰', '配饰'],
+        'lighting': ['光线', '光照', '亮度', '阴影', '高光', '明暗', '光影'],
+        'texture': ['质感', '纹理', '细节', '刻画', '表面', '光滑度'],
+        'composition': ['构图', '布局', '空间感', '透视', '远近', '层次'],
+        'atmosphere': ['氛围', '气氛', '意境', '艺术感', '表现力']
+    }
+    
+    categorized_keywords = {category: [] for category in SEMANTIC_CATEGORIES}
+    all_comments = []
+    
+    try:
+        # 解析JSON响应
+        if isinstance(response, str):
+            try:
+                response_dict = json.loads(response)
+            except json.JSONDecodeError:
+                print("响应不是有效的JSON格式")
+                return categorized_keywords
+        else:
+            response_dict = response
+        
+        # 收集所有评语
+        if 'dimensions' in response_dict:
+            for dimension in response_dict['dimensions']:
+                if 'comment' in dimension and dimension['comment']:
+                    all_comments.append(dimension['comment'])
+        
+        if 'summary' in response_dict:
+            if 'strengths' in response_dict['summary']:
+                all_comments.extend(response_dict['summary']['strengths'])
+            if 'suggestions' in response_dict['summary']:
+                all_comments.extend(response_dict['summary']['suggestions'])
+        
+        # 按语义类别提取关键词
+        for comment in all_comments:
+            for category, keywords in SEMANTIC_CATEGORIES.items():
+                for keyword in keywords:
+                    if keyword in comment:
+                        categorized_keywords[category].append(keyword)
+        
+        # 去重
+        for category in categorized_keywords:
+            categorized_keywords[category] = list(set(categorized_keywords[category]))
+            
+        return categorized_keywords
+    except Exception as e:
+        print(f"提取关键词时出错: {e}")
+        return categorized_keywords

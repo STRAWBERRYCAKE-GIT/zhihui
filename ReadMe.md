@@ -1,3 +1,40 @@
+# 10.6更新
+ 1.images表
+ ```
+  ALTER TABLE zhihui_db.images ADD COLUMN empty_regions JSON;
+  ALTER TABLE zhihui_db.images ADD COLUMN content_regions JSON;
+  ALTER TABLE zhihui_db.images ADD COLUMN categorized_keywords LONGTEXT NULL AFTER empty_regions;
+  ALTER TABLE zhihui_db.images ADD COLUMN keyword_matches LONGTEXT NULL AFTER content_regions;
+ ```
+ 更新之后长这样：
+ mysql> describe images;
++----------------------+--------------+------+-----+---------+----------------+
+| Field                | Type         | Null | Key | Default | Extra          |
++----------------------+--------------+------+-----+---------+----------------+
+| id                   | int          | NO   | PRI | NULL    | auto_increment |
+| user_id              | int          | NO   | MUL | NULL    |                |
+| filename             | varchar(255) | NO   |     | NULL    |                |
+| original_name        | varchar(255) | NO   |     | NULL    |                |
+| score                | int          | YES  |     | NULL    |                |
+| upload_time          | datetime     | NO   |     | NULL    |                |
+| strengths            | text         | YES  |     | NULL    |                |
+| image_url            | varchar(500) | NO   |     | NULL    |                |
+| suggestions          | text         | YES  |     | NULL    |                |
+| dimensions           | json         | YES  |     | NULL    |                |
+| empty_regions        | json         | YES  |     | NULL    |                |
+| categorized_keywords | longtext     | YES  |     | NULL    |                |
+| content_regions      | json         | YES  |     | NULL    |                |
+| keyword_matches      | longtext     | YES  |     | NULL    |                |
++----------------------+--------------+------+-----+---------+----------------+
+
+ 2.后端库更新
+
+ ```
+pip install packaging
+pip install transformers
+pip install torch pillow numpy safetensors
+```
+
 # 更新
 
 images表有修改
