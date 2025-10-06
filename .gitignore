@@ -100,4 +100,4 @@ coverage.xml
 backend/zhihui/uploads/backend/dinov3_model/model.safetensors
 
 # 排除大模型文件
-backend/dinov3_model/model.safetensors
+backend/dinov3_model/
