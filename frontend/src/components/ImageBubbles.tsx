@@ -5,28 +5,28 @@ interface Bubble {
   id: string;
   position: Position;
   content: string;
-  keyword?: string; // 新增关键词字段
-  text?: string;    // 新增：与content相同的字段
-  delay?: number;   // 新增：动画延迟字段
-  width?: number;   // 新增：气泡宽度
-  height?: number;  // 新增：气泡高度
+  keyword?: string; // 关键词字段
+  text?: string;    // 与content相同的字段
+  delay?: number;   // 动画延迟字段
+  width?: number;   // 气泡宽度
+  height?: number;  // 气泡高度
 }
 
 interface Position {
   x: number;
   y: number;
-  dotX?: number;    // 新增：圆点X坐标
-  dotY?: number;    // 新增：圆点Y坐标
-  bubbleX?: number; // 新增：气泡X坐标
-  bubbleY?: number; // 新增：气泡Y坐标
+  dotX?: number;    // 圆点X坐标
+  dotY?: number;    // 圆点Y坐标
+  bubbleX?: number; // 气泡X坐标
+  bubbleY?: number; // 气泡Y坐标
 }
 
 interface ImageBubblesProps {
   imageUrl: string;
   sentences: string[];
   isVisible: boolean;
-  contentRegions?: Position[]; // 新增：内容区域位置
-  emptyRegions?: Position[]; // 新增：空白区域位置
+  contentRegions?: Position[]; // 内容区域位置
+  emptyRegions?: Position[]; // 空白区域位置
 }
 
 const ImageBubbles: React.FC<ImageBubblesProps> = ({ 
@@ -168,9 +168,16 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
       const usedDotPositions: { x: number; y: number }[] = [];
       const usedBubblePositions: { x: number; y: number; width: number; height: number }[] = [];
       
-      // 分离内容区域和空白区域
+      // 分离内容区域和空白区域 - 添加详细日志
       const hasContentRegions = contentRegions && contentRegions.length > 0;
       const hasEmptyRegions = emptyRegions && emptyRegions.length > 0;
+      console.log('ImageBubbles数据:', {
+        hasContentRegions,
+        contentRegionsCount: contentRegions?.length,
+        hasEmptyRegions,
+        emptyRegionsCount: emptyRegions?.length,
+        sentencesCount: sentences.length
+      });
       
       // 为每个句子生成气泡
       sentences.forEach((sentence, index) => {
@@ -185,21 +192,30 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
           attempts++;
           let dotX, dotY;
           
+          // 优化contentRegions的使用逻辑
           if (hasContentRegions && index < contentRegions.length) {
             const contentRegionIndex = index;
             const region = contentRegions[contentRegionIndex];
             
-            // 计算图片实际尺寸与容器尺寸的比例
-            const scaleX = containerWidth / imageDimensions.width;
-            const scaleY = containerHeight / imageDimensions.height;
-            
-            // 计算圆点位置
-            dotX = region.x * scaleX;
-            dotY = region.y * scaleY;
-            
-            // 确保位置在容器内
-            dotX = Math.max(40, Math.min(dotX, containerWidth - 40));
-            dotY = Math.max(40, Math.min(dotY, containerHeight - 40));
+            // 确保region有效
+            if (region && typeof region.x === 'number' && typeof region.y === 'number') {
+              // 计算图片实际尺寸与容器尺寸的比例
+              const scaleX = containerWidth / imageDimensions.width;
+              const scaleY = containerHeight / imageDimensions.height;
+              
+              // 计算圆点位置
+              dotX = region.x * scaleX;
+              dotY = region.y * scaleY;
+              
+              // 确保位置在容器内
+              dotX = Math.max(40, Math.min(dotX, containerWidth - 40));
+              dotY = Math.max(40, Math.min(dotY, containerHeight - 40));
+            } else {
+              // 如果region无效，使用随机位置
+              console.warn(`无效的contentRegion数据:`, region);
+              dotX = Math.random() * (containerWidth - 80) + 40;
+              dotY = Math.random() * (containerHeight - 80) + 40;
+            }
           } else {
             // 如果没有足够的内容区域，使用随机位置
             dotX = Math.random() * (containerWidth - 80) + 40;
@@ -238,7 +254,7 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
               }
             }
             
-            // 如果没有重叠，允许气泡显示，不再强制要求空白区域
+            // 如果没有重叠，允许气泡显示
             if (!bubbleOverlap) {
               bestPosition = { dotX, dotY, bubbleX, bubbleY };
             }
@@ -268,12 +284,15 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
             },
             content: sentence,
             delay: index * 0.15,
-            width: bubblePos.width,  // 保存气泡宽度
-            height: bubblePos.height  // 保存气泡高度
+            width: bubblePos.width,  
+            height: bubblePos.height  
           });
+        } else {
+          console.warn(`未能为句子 ${index} 找到合适的气泡位置`);
         }
       });
 
+      console.log('生成的气泡数量:', newBubbles.length);
       setBubbles(newBubbles);
     }
   }, [imageUrl, sentences, imageLoaded, contentRegions, emptyRegions, imageDimensions, calculateBubblePosition]);

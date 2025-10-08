@@ -16,6 +16,7 @@ function App() {
   const { isAuthenticated, logout, user } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadSuccess, setUploadSuccess] = useState<boolean>(false); // 新增：跟踪上传是否成功
   const [evaluation, setEvaluation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   // 历史记录状态
@@ -99,8 +100,9 @@ function App() {
       setEvaluation(null); // 清空旧的评价，显示“正在生成评价...”
       setSelectedDimension(null);
       setUploading(true);
+      setUploadSuccess(false); // 确保开始新上传时重置成功状态
       setError(null);
-
+  
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -124,6 +126,10 @@ function App() {
         setShowBubbles(true);
         
         await loadHistoryRecords();
+        
+        // 新增：上传成功，更新状态
+        setUploading(false);
+        setUploadSuccess(true);
         
       } catch (err: any) {
         let errorMessage = '上传失败，请稍后重试';
@@ -175,6 +181,25 @@ function App() {
       setLoadingThumbnails(new Set());
       // 成功获取历史记录时清除错误状态
       setError(null);
+      
+      // 新增：自动渐进式加载缩略图
+      // 先加载前几个缩略图（比如前4个），让用户尽快看到内容
+      if (response.data.images && response.data.images.length > 0) {
+        // 立即加载前4个缩略图
+        const initialLoadCount = Math.min(4, response.data.images.length);
+        for (let i = 0; i < initialLoadCount; i++) {
+          loadThumbnail(response.data.images[i]);
+        }
+        
+        // 使用setTimeout延迟加载剩余的缩略图，避免一次性加载过多影响性能
+        if (response.data.images.length > initialLoadCount) {
+          for (let i = initialLoadCount; i < response.data.images.length; i++) {
+            setTimeout(() => {
+              loadThumbnail(response.data.images[i]);
+            }, (i - initialLoadCount) * 300); // 每个缩略图间隔300毫秒加载
+          }
+        }
+      }
     } catch (err: any) {
       console.error('加载历史记录失败:', err);
       let errorMessage = '加载历史记录失败';
@@ -228,7 +253,9 @@ function App() {
     try {
       // 先显示加载状态
       setEvaluation(null);
-      setSelectedDimension(null)
+      setSelectedDimension(null);
+      setUploading(false); // 重置上传状态
+      setUploadSuccess(false); // 重置成功状态
       // 使用axios获取图片数据并确保携带token
       const response = await axios.get(`${record.image_url}`, {
         responseType: 'blob',
@@ -244,6 +271,8 @@ function App() {
       let dimensionsData = record.dimensions;
       let strengthsData = record.strengths;
       let suggestionsData = record.suggestions;
+      let emptyRegionsData = record.empty_regions || record.emptyRegions || [];
+      let contentRegionsData = record.content_regions || record.contentRegions || [];
       
       // 如果 dimensions 是字符串，尝试解析为 JSON
       if (typeof dimensionsData === 'string') {
@@ -275,6 +304,26 @@ function App() {
         }
       }
       
+      // 解析 empty_regions 数据
+      if (typeof emptyRegionsData === 'string') {
+        try {
+          emptyRegionsData = JSON.parse(emptyRegionsData);
+        } catch (parseError) {
+          console.error('解析 empty_regions JSON 失败:', parseError);
+          emptyRegionsData = [];
+        }
+      }
+      
+      // 解析 content_regions 数据
+      if (typeof contentRegionsData === 'string') {
+        try {
+          contentRegionsData = JSON.parse(contentRegionsData);
+        } catch (parseError) {
+          console.error('解析 content_regions JSON 失败:', parseError);
+          contentRegionsData = [];
+        }
+      }
+      
       // 确保都是数组
       if (!Array.isArray(dimensionsData)) {
         console.warn('dimensions 不是数组格式:', dimensionsData);
@@ -288,13 +337,23 @@ function App() {
         console.warn('suggestions 不是数组格式:', suggestionsData);
         suggestionsData = [];
       }
+      if (!Array.isArray(emptyRegionsData)) {
+        console.warn('empty_regions 不是数组格式:', emptyRegionsData);
+        emptyRegionsData = [];
+      }
+      if (!Array.isArray(contentRegionsData)) {
+        console.warn('content_regions 不是数组格式:', contentRegionsData);
+        contentRegionsData = [];
+      }
     
       setEvaluation({
         score: record.score,
         strengths: strengthsData,
         suggestions: suggestionsData,
         dimensions: dimensionsData,
-        filename: record.original_name
+        filename: record.original_name,
+        emptyRegions: emptyRegionsData,  // 添加空白区域数据
+        contentRegions: contentRegionsData  // 添加内容区域数据
       });
       
       // 生成气泡文本
@@ -308,7 +367,9 @@ function App() {
         score: record.score,
         strengths: strengthsData,
         suggestions: suggestionsData,
-        dimensions: dimensionsData
+        dimensions: dimensionsData,
+        emptyRegions: emptyRegionsData,
+        contentRegions: contentRegionsData
       });
       console.log('历史记录概括化后的气泡文本:', sentences);
       setBubbleSentences(sentences);
@@ -470,7 +531,8 @@ function App() {
                         imageUrl={selectedImage}
                         sentences={bubbleSentences}
                         isVisible={showBubbles}
-                        emptyRegions={evaluation?.empty_regions || []}
+                        emptyRegions={evaluation?.emptyRegions || []}
+                        contentRegions={evaluation?.contentRegions || []}
                       />
                       {evaluation?.filename && (
                         <div className="image-filename">
@@ -500,6 +562,7 @@ function App() {
                   )}
                   
                   {uploading && <span className="uploading-text">上传中...</span>}
+                  {uploadSuccess && !uploading && <span className="success-text">上传成功</span>}
                   {error && <span className="error-text">{error}</span>}
                   
                   {/* 隐藏的文件输入，供+按钮使用 */}
@@ -536,7 +599,7 @@ function App() {
                           {/* 使用雷达图组件 */}
                           {evaluation.dimensions && evaluation.dimensions.length > 0 && (
                             <RadarChart 
-                              dimensions={evaluation.dimensions}
+                              dimensions={evaluation.dimensions} 
                               onDimensionClick={handleDimensionClick}
                             />
                           )}
