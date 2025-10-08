@@ -8,6 +8,8 @@ interface Bubble {
   keyword?: string; // 新增关键词字段
   text?: string;    // 新增：与content相同的字段
   delay?: number;   // 新增：动画延迟字段
+  width?: number;   // 新增：气泡宽度
+  height?: number;  // 新增：气泡高度
 }
 
 interface Position {
@@ -40,17 +42,20 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const previousImageUrl = useRef<string>(''); // 记录上一个图片URL
   const previousSentences = useRef<string[]>([]); // 记录上一组句子
+  const bubbleRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // 计算气泡主体在图片边缘的位置，更灵活的算法
-  const calculateBubblePosition = useCallback((dotX: number, dotY: number, containerWidth: number, containerHeight: number, usedBubblePositions: { x: number; y: number; width: number; height: number }[]) => {
+  const calculateBubblePosition = useCallback((dotX: number, dotY: number, containerWidth: number, containerHeight: number, usedBubblePositions: { x: number; y: number; width: number; height: number }[], content: string) => {
     const margin = 20; // 减小边距，但仍保持合理距离
-    const baseBubbleWidth = 160;
-    const baseBubbleHeight = 50;
+    
+    // 动态计算基础宽度，基于内容长度
+    const baseBubbleWidth = Math.min(300, Math.max(160, content.length * 7)); // 根据内容长度调整宽度，最多300px
+    const baseBubbleHeight = Math.min(200, Math.max(50, (content.length / 20) * 20 + 40)); // 根据内容长度调整高度，最多200px
     
     // 根据气泡数量动态调整气泡大小，避免过多气泡导致遮挡
     const bubbleCount = usedBubblePositions.length + 1;
-    const bubbleWidth = Math.max(baseBubbleWidth - bubbleCount * 5, 120); // 最小120像素
-    const bubbleHeight = Math.max(baseBubbleHeight - bubbleCount * 2, 40); // 最小40像素
+    const bubbleWidth = Math.max(baseBubbleWidth - bubbleCount * 5, 160); // 增大最小宽度到160像素
+    const bubbleHeight = Math.max(baseBubbleHeight - bubbleCount * 2, 50); // 增大最小高度到50像素
     
     // 定义多个可能的气泡位置策略（左上、右上、左下、右下、上方、下方）
     const possiblePositions = [
@@ -170,7 +175,7 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
       // 为每个句子生成气泡
       sentences.forEach((sentence, index) => {
         let bestPosition = null;
-        let bubblePos = null; // 在外部作用域定义bubblePos变量
+        let bubblePos = null; 
         
         // 尝试找到不重叠的位置的最大尝试次数
         const maxAttempts = 100;
@@ -180,49 +185,51 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
           attempts++;
           let dotX, dotY;
           
-          // 修复方案
-          // 在sentences.forEach循环内部
           if (hasContentRegions && index < contentRegions.length) {
-          // 关键修复：始终使用与句子索引匹配的内容区域
-          const contentRegionIndex = index; 
-          const region = contentRegions[contentRegionIndex];
-          
-          // 计算图片实际尺寸与容器尺寸的比例
-          const scaleX = containerWidth / imageDimensions.width;
-          const scaleY = containerHeight / imageDimensions.height;
-          
-          // 移除随机偏移量，确保气泡准确指向内容区域
-          dotX = region.x * scaleX;
-          dotY = region.y * scaleY;
-          
-          // 确保位置在容器内
-          dotX = Math.max(40, Math.min(dotX, containerWidth - 40));
-          dotY = Math.max(40, Math.min(dotY, containerHeight - 40));
+            const contentRegionIndex = index;
+            const region = contentRegions[contentRegionIndex];
+            
+            // 计算图片实际尺寸与容器尺寸的比例
+            const scaleX = containerWidth / imageDimensions.width;
+            const scaleY = containerHeight / imageDimensions.height;
+            
+            // 计算圆点位置
+            dotX = region.x * scaleX;
+            dotY = region.y * scaleY;
+            
+            // 确保位置在容器内
+            dotX = Math.max(40, Math.min(dotX, containerWidth - 40));
+            dotY = Math.max(40, Math.min(dotY, containerHeight - 40));
           } else {
-          // 如果没有足够的内容区域，使用随机位置
-          dotX = Math.random() * (containerWidth - 80) + 40;
-          dotY = Math.random() * (containerHeight - 80) + 40;
+            // 如果没有足够的内容区域，使用随机位置
+            dotX = Math.random() * (containerWidth - 80) + 40;
+            dotY = Math.random() * (containerHeight - 80) + 40;
           }
           
           // 检查圆点位置是否与已使用位置重叠过多
           let dotOverlap = false;
           for (const usedPos of usedDotPositions) {
             const distance = Math.sqrt(Math.pow(usedPos.x - dotX, 2) + Math.pow(usedPos.y - dotY, 2));
-            if (distance < 60) { // 减小最小距离要求，提高布局灵活性
+            if (distance < 60) {
               dotOverlap = true;
               break;
             }
           }
           
           if (!dotOverlap) {
-            // 计算气泡位置
-            bubblePos = calculateBubblePosition(dotX, dotY, containerWidth, containerHeight, usedBubblePositions);
+            // 计算气泡位置 - 传入内容以动态调整大小
+            bubblePos = calculateBubblePosition(dotX, dotY, containerWidth, containerHeight, usedBubblePositions, sentence);
             const bubbleX = bubblePos.bubbleX;
             const bubbleY = bubblePos.bubbleY;
             
             // 检查气泡位置是否与已使用位置重叠
             let bubbleOverlap = false;
-            const newBubblePos = { x: bubbleX, y: bubbleY, width: bubblePos.width, height: bubblePos.height };
+            const newBubblePos = {
+              x: bubbleX, 
+              y: bubbleY, 
+              width: bubblePos.width,  
+              height: bubblePos.height 
+            };
             
             for (const usedPos of usedBubblePositions) {
               if (isPositionOverlapping(newBubblePos, usedPos)) {
@@ -231,32 +238,7 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
               }
             }
             
-            // 如果有空白区域数据，优先检查气泡是否位于空白区域
-            if (!bubbleOverlap && hasEmptyRegions) {
-              let inEmptyRegion = false;
-              
-              // 允许有一些尝试次数来寻找空白区域
-              if (attempts < maxAttempts * 0.7) {
-                // 检查气泡是否在空白区域附近
-                for (const emptyRegion of emptyRegions) {
-                  const scaledEmptyX = emptyRegion.x * (containerWidth / imageDimensions.width);
-                  const scaledEmptyY = emptyRegion.y * (containerHeight / imageDimensions.height);
-                  const distanceToEmpty = Math.sqrt(
-                    Math.pow(bubbleX + bubblePos.width/2 - scaledEmptyX, 2) + 
-                    Math.pow(bubbleY + bubblePos.height/2 - scaledEmptyY, 2)
-                  );
-                  
-                  if (distanceToEmpty < 80) { // 允许一定距离内
-                    inEmptyRegion = true;
-                    break;
-                  }
-                }
-                
-                // 如果不在空白区域，继续尝试
-                if (!inEmptyRegion) continue;
-              }
-            }
-            
+            // 如果没有重叠，允许气泡显示，不再强制要求空白区域
             if (!bubbleOverlap) {
               bestPosition = { dotX, dotY, bubbleX, bubbleY };
             }
@@ -264,7 +246,7 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
         }
         
         // 如果找到了合适的位置，添加到气泡列表
-        if (bestPosition && bubblePos) { // 添加对bubblePos的检查
+        if (bestPosition && bubblePos) { 
           const { dotX, dotY, bubbleX, bubbleY } = bestPosition;
           
           usedDotPositions.push({ x: dotX, y: dotY });
@@ -276,7 +258,7 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
           });
           
           newBubbles.push({
-            id: `bubble-${index}-${Date.now()}`, // 添加时间戳确保ID唯一
+            id: `bubble-${index}-${Date.now()}`,
             text: sentence,
             position: {
               dotX: (dotX / containerWidth) * 100,
@@ -285,7 +267,9 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
               bubbleY: (bubbleY / containerHeight) * 100
             },
             content: sentence,
-            delay: index * 0.15 // 减小延迟，使动画更流畅
+            delay: index * 0.15,
+            width: bubblePos.width,  // 保存气泡宽度
+            height: bubblePos.height  // 保存气泡高度
           });
         }
       });
@@ -293,6 +277,93 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
       setBubbles(newBubbles);
     }
   }, [imageUrl, sentences, imageLoaded, contentRegions, emptyRegions, imageDimensions, calculateBubblePosition]);
+
+  // 动态调整气泡大小
+  useEffect(() => {
+    if (!isVisible || bubbles.length === 0) {
+      return;
+    }
+
+    // 使用setTimeout确保DOM已经渲染
+    const timer = setTimeout(() => {
+      const newBubbles = [...bubbles];
+      let hasChanges = false;
+
+      newBubbles.forEach((bubble, index) => {
+        const bubbleRef = bubbleRefs.current[bubble.id];
+        if (bubbleRef) {
+          const contentDiv = bubbleRef.querySelector('.bubble-content') as HTMLElement;
+          if (contentDiv) {
+            // 获取内容实际尺寸
+            const contentWidth = contentDiv.scrollWidth + 28; // 加上padding
+            const contentHeight = contentDiv.scrollHeight + 20; // 加上padding
+            
+            // 如果内容尺寸大于气泡当前尺寸，更新气泡尺寸
+            if (contentWidth > (bubble.width || 0) || contentHeight > (bubble.height || 0)) {
+              const container = containerRef.current;
+              if (container) {
+                const containerRect = container.getBoundingClientRect();
+                const containerWidth = containerRect.width;
+                const containerHeight = containerRect.height;
+                
+                // 计算新的气泡尺寸，不超过容器的80%
+                const newWidth = Math.min(contentWidth, containerWidth * 0.8);
+                const newHeight = Math.min(contentHeight, containerHeight * 0.5);
+                
+                // 调整气泡位置，确保不超出容器
+                const bubbleXPercent = bubble.position.bubbleX || 0;
+                const bubbleYPercent = bubble.position.bubbleY || 0;
+                
+                // 计算实际像素位置
+                const currentX = (bubbleXPercent / 100) * containerWidth;
+                const currentY = (bubbleYPercent / 100) * containerHeight;
+                
+                // 调整位置，确保气泡不超出容器
+                let newX = currentX;
+                let newY = currentY;
+                
+                // 检查右侧边界
+                if (currentX + newWidth > containerWidth - 20) {
+                  newX = containerWidth - newWidth - 20;
+                }
+                // 检查底部边界
+                if (currentY + newHeight > containerHeight - 20) {
+                  newY = containerHeight - newHeight - 20;
+                }
+                // 检查左侧边界
+                if (newX < 20) {
+                  newX = 20;
+                }
+                // 检查顶部边界
+                if (newY < 20) {
+                  newY = 20;
+                }
+                
+                // 更新气泡属性
+                newBubbles[index] = {
+                  ...bubble,
+                  width: newWidth,
+                  height: newHeight,
+                  position: {
+                    ...bubble.position,
+                    bubbleX: (newX / containerWidth) * 100,
+                    bubbleY: (newY / containerHeight) * 100
+                  }
+                };
+                hasChanges = true;
+              }
+            }
+          }
+        }
+      });
+
+      if (hasChanges) {
+        setBubbles(newBubbles);
+      }
+    }, 100); // 延迟100ms，确保气泡已经渲染
+
+    return () => clearTimeout(timer);
+  }, [bubbles, isVisible]);
 
   // 获取图片实际尺寸
   // 1. 优化handleImageLoad函数中的重置逻辑
@@ -341,8 +412,8 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
         
         {imageLoaded && isVisible && bubbles.map(bubble => (
           <div key={bubble.id} className="bubble-group">
-            {/* 圆点标注 */}
-            <div 
+            {/* 移除：圆点标注 */}
+            {/* <div 
               className="bubble-dot" 
               style={{
                 left: `${bubble.position.dotX}%`, 
@@ -350,10 +421,10 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
                 animationDelay: `${bubble.delay}s`,
                 backgroundColor: bubble.keyword ? '#4CAF50' : '#2196F3'
               }}
-            />
+            /> */}
             
-            {/* 连接线 */}
-            <svg 
+            {/* 移除：连接线 */}
+            {/* <svg 
               className="bubble-connector"
               style={{
                 position: 'absolute',
@@ -373,15 +444,18 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
                 strokeWidth="2"
                 strokeDasharray="5,5"
               />
-            </svg>
+            </svg> */}
             
-            {/* 气泡主体 */}
+            {/* 气泡主体 - 动态设置宽度和高度 */}
             <div 
+              ref={el => bubbleRefs.current[bubble.id] = el}
               className="evaluation-bubble-new" 
               style={{
                 left: `${bubble.position.bubbleX}%`, 
                 top: `${bubble.position.bubbleY}%`,
-                animationDelay: `${bubble.delay + 0.2}s`
+                animationDelay: `${bubble.delay + 0.2}s`,
+                width: bubble.width ? `${bubble.width}px` : 'auto',
+                minHeight: bubble.height ? `${bubble.height}px` : 'auto'
               }}
             >
               {/* 如果有关键词，显示关键词标签 */}

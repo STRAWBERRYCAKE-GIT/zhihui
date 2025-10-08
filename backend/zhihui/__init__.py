@@ -9,7 +9,7 @@ def create_app():
     app = Flask(__name__)
     app.config['MYSQL_HOST'] = 'localhost'
     app.config['MYSQL_USER'] = 'root'
-    app.config['MYSQL_PASSWORD'] = '123456'
+    app.config['MYSQL_PASSWORD'] = 'Wangjiani050411'
     app.config['MYSQL_DB'] = 'zhihui_db'
 
     app.config['JWT_SECRET_KEY'] = 'your-secret-key'    #挖个坑，以后记得设置一下

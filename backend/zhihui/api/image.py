@@ -7,7 +7,8 @@ import datetime
 import json
 import uuid
 import io  # 添加io模块导入
-from zhihui.utils import get_db_connection, gpt_api, detect_blank_spaces, calculate_bubble_positions, detect_keyword_regions  # 添加detect_keyword_regions导入
+# 1. 在文件顶部导入detect_content_regions函数
+from zhihui.utils import get_db_connection, gpt_api, detect_blank_spaces, calculate_bubble_positions, detect_keyword_regions, detect_content_regions
 
 image_bp = Blueprint('image', __name__)
 
@@ -82,7 +83,7 @@ def upload_image():
                 else:
                     raise Exception("AI 返回格式不支持")
                 
-                # ==== 新增部分：使用dinov3检测空白区域 ====
+                # ==== 新增部分：使用dinov3检测空白区域和内容区域 ====
                 try:
                     file.stream.seek(0)  # 再次重置文件流位置
                     # 打开图片获取尺寸信息
@@ -92,16 +93,23 @@ def upload_image():
                     
                     file.stream.seek(0)  # 重置文件流位置
                     # 调用dinov3检测空白区域
-                    blank_spaces = detect_blank_spaces(file.stream)
+                    blank_spaces = detect_blank_spaces(file.stream, focus_on_content=False)
+                    
+                    file.stream.seek(0)  # 重置文件流位置
+                    # 调用dinov3检测内容区域
+                    content_spaces = detect_content_regions(file.stream)
                     
                     # 计算气泡批注的最佳位置
                     bubble_positions = calculate_bubble_positions(width, height, blank_spaces)
                     # 将气泡位置信息添加到评价数据中
                     evaluation_data['empty_regions'] = bubble_positions
+                    # 添加内容区域信息
+                    evaluation_data['content_regions'] = content_spaces
                 except Exception as e:
                     print(f"dinov3处理失败: {e}")
                     # 如果dinov3处理失败，添加默认位置
                     evaluation_data['empty_regions'] = []
+                    evaluation_data['content_regions'] = []
                 # =======================================
                 
                 try:
@@ -135,8 +143,8 @@ def upload_image():
                         
                         # 修改SQL语句，添加categorized_keywords字段
                         sql = """
-                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, categorized_keywords)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """
                         params = (
                             user_id,
@@ -149,6 +157,7 @@ def upload_image():
                             unique_filename,
                             file.filename,
                             json.dumps(evaluation_data.get('empty_regions', []), ensure_ascii=False),
+                            json.dumps(evaluation_data.get('content_regions', []), ensure_ascii=False),
                             categorized_keywords_json
                         )
                         c.execute(sql, params)
@@ -163,6 +172,7 @@ def upload_image():
                             "filename": unique_filename,
                             "original_name": file.filename,
                             "empty_regions": evaluation_data.get('empty_regions', []),
+                            "content_regions": evaluation_data.get('content_regions', []),
                             "categorized_keywords": categorized_keywords
                         }), 200
                 finally:
@@ -245,7 +255,7 @@ def get_history():
                 
                 # 修改SQL查询，添加categorized_keywords字段
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, categorized_keywords FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -259,6 +269,7 @@ def get_history():
                     suggestions = json.loads(img['suggestions']) if img['suggestions'] else []
                     dimensions = json.loads(img['dimensions']) if img['dimensions'] else []
                     empty_regions = json.loads(img['empty_regions']) if img['empty_regions'] else []
+                    content_regions = json.loads(img['content_regions']) if img.get('content_regions') else []
                     # 解析分类关键词
                     categorized_keywords = json.loads(img['categorized_keywords']) if img.get('categorized_keywords') else {}
                     
@@ -273,6 +284,7 @@ def get_history():
                         "filename": img['filename'],
                         "original_name": img['original_name'],
                         "empty_regions": empty_regions,
+                        "content_regions": content_regions,
                         "categorized_keywords": categorized_keywords
                     })
                 
