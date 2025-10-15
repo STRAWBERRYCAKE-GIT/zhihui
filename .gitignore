@@ -96,6 +96,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+.uploads/
 # 上传的文件目录
 backend/zhihui/uploads/backend/dinov3_model/model.safetensors
 
