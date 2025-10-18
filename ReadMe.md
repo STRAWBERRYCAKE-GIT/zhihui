@@ -1,3 +1,23 @@
+# CN-CLIP更新
+1.库安装
+1.1 CLIP库（可能没用到 因为真正集成的是CN-CLIP）
+```
+git clone https://github.com/openai/CLIP.git
+cd CLIP
+pip install .
+```
+1.2 CN-CLIP库
+set LMDB_PURE=1
+pip install cn_clip
+```
+权重文件打包发群里（有四个大的压缩包，其中CLIP就是1.1安装下来的）
+
+2.数据库更新
+images表
+```
+ALTER TABLE images ADD COLUMN text_region_mapping JSON NULL;
+```
+
 # 10.6更新
  1.images表
  ```
