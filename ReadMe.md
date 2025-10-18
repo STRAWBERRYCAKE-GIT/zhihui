@@ -7,6 +7,7 @@ cd CLIP
 pip install .
 ```
 1.2 CN-CLIP库
+```
 set LMDB_PURE=1
 pip install cn_clip
 ```
