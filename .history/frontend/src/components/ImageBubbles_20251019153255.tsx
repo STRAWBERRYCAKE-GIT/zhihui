@@ -103,42 +103,20 @@ const isPositionOverlapping = (
 };
 
 // 回退：基于圆点的智能分布算法（普通函数版本，避免 useCallback 顶层 Hook 问题）
-// 修改 calculateBubblePosition 以避开内容并偏向空白
 function calculateBubblePosition(
   dotX: number,
   dotY: number,
   containerWidth: number,
   containerHeight: number,
   usedBubblePositions: { x: number; y: number; width: number; height: number }[],
-  content: string,
-  contentBoxes: { x: number; y: number; width: number; height: number }[],
-  emptyBoxes: { x: number; y: number; width: number; height: number }[],
-  ctx: CanvasRenderingContext2D | null,
-  imageWidth: number,
-  imageHeight: number
+  content: string
 ) {
   const margin = 20;
 
   const bubbleCount = usedBubblePositions.length + 1;
   const { bubbleWidth, bubbleHeight } = computeBubbleSize(content, bubbleCount);
 
-  // 以圆点为中心的一圈候选 + 边缘/角落备选
-  const ringOffsets = [
-    { dx: 0, dy: -(bubbleHeight + 12) },
-    { dx: 0, dy: bubbleHeight + 12 },
-    { dx: -(bubbleWidth + 12), dy: 0 },
-    { dx: bubbleWidth + 12, dy: 0 },
-    { dx: -(bubbleWidth + 12), dy: -(bubbleHeight + 12) },
-    { dx: bubbleWidth + 12, dy: -(bubbleHeight + 12) },
-    { dx: -(bubbleWidth + 12), dy: bubbleHeight + 12 },
-    { dx: bubbleWidth + 12, dy: bubbleHeight + 12 }
-  ];
-
   const possiblePositions = [
-    ...ringOffsets.map(({ dx, dy }) => ({
-      bubbleX: dotX + dx - bubbleWidth / 2,
-      bubbleY: dotY + dy - bubbleHeight / 2
-    })),
     { bubbleX: margin, bubbleY: margin },
     { bubbleX: containerWidth - margin - bubbleWidth, bubbleY: margin },
     { bubbleX: margin, bubbleY: containerHeight - margin - bubbleHeight },
@@ -146,7 +124,9 @@ function calculateBubblePosition(
     { bubbleX: dotX - bubbleWidth / 2, bubbleY: margin },
     { bubbleX: dotX - bubbleWidth / 2, bubbleY: containerHeight - margin - bubbleHeight },
     { bubbleX: margin, bubbleY: dotY - bubbleHeight / 2 },
-    { bubbleX: containerWidth - margin - bubbleWidth, bubbleY: dotY - bubbleHeight / 2 }
+    { bubbleX: containerWidth - margin - bubbleWidth, bubbleY: dotY - bubbleHeight / 2 },
+    { bubbleX: dotX - bubbleWidth / 2, bubbleY: dotY - bubbleHeight - 10 },
+    { bubbleX: dotX - bubbleWidth / 2, bubbleY: dotY + 10 }
   ];
 
   let bestScore = -Infinity;
@@ -158,53 +138,28 @@ function calculateBubblePosition(
       bubbleY: clamp(pos.bubbleY, margin, containerHeight - margin - bubbleHeight)
     };
 
-    const candidateRect = {
-      x: adjustedPos.bubbleX,
-      y: adjustedPos.bubbleY,
-      width: bubbleWidth,
-      height: bubbleHeight
-    };
-
-    // 距离圆点（希望靠近）
     const dx = adjustedPos.bubbleX + bubbleWidth / 2 - dotX;
     const dy = adjustedPos.bubbleY + bubbleHeight / 2 - dotY;
     const distanceToDot = Math.sqrt(dx * dx + dy * dy);
 
-    let score = 0;
-
-    // 距离得分
-    score += 1500 / (distanceToDot + 1);
-
-    // 避免气泡之间重叠
+    let overlapScore = 0;
     for (const usedPos of usedBubblePositions) {
-      if (isPositionOverlapping(candidateRect, usedPos)) {
-        score -= 500;
+      if (
+        isPositionOverlapping(
+          { x: adjustedPos.bubbleX, y: adjustedPos.bubbleY, width: bubbleWidth, height: bubbleHeight },
+          usedPos
+        )
+      ) {
+        overlapScore -= 200;
       }
     }
 
-    // 强烈避免与内容区域重叠
-    for (const box of contentBoxes) {
-      if (isPositionOverlapping(candidateRect, box)) {
-        score -= 1200;
-      }
-    }
-
-    // 空白评分（Canvas 采样）
-    const emptinessScore = computeEmptinessScoreForRect(
-      candidateRect,
-      containerWidth,
-      containerHeight,
-      imageWidth,
-      imageHeight,
-      ctx
+    const centerPenalty = Math.sqrt(
+      Math.pow(adjustedPos.bubbleX + bubbleWidth / 2 - containerWidth / 2, 2) +
+        Math.pow(adjustedPos.bubbleY + bubbleHeight / 2 - containerHeight / 2, 2)
     );
-    score += emptinessScore * 800;
 
-    // 如果落在后端提供的空白区域内，额外加分
-    const inEmptyBox = emptyBoxes.some((b) => isPositionOverlapping(candidateRect, b));
-    if (inEmptyBox) {
-      score += 300;
-    }
+    const score = 1000 / (distanceToDot + 1) + overlapScore + centerPenalty / 10;
 
     if (score > bestScore) {
       bestScore = score;
@@ -230,10 +185,6 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
   const previousSentences = useRef<string[]>([]); // 记录上一组句子
   const bubbleRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  // 新增：离屏 Canvas 及上下文用于图片采样
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-
   // 生成气泡位置
   useEffect(() => {
     if (!sentences.length || !imageLoaded || !containerRef.current || !imageUrl) {
@@ -248,33 +199,32 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
       previousImageUrl.current = imageUrl;
 
       const container = containerRef.current!;
+      // 优先使用图片元素的尺寸，防止容器为0导致除零/NaN
       const imgEl = container.querySelector('.evaluation-image') as HTMLImageElement | null;
       const rectFromImg = imgEl ? imgEl.getBoundingClientRect() : null;
       const containerRect = container.getBoundingClientRect();
       const baseRect = rectFromImg ?? containerRect;
       const containerWidth = Math.max(baseRect.width, 1);
       const containerHeight = Math.max(baseRect.height, 1);
-  
+
       try {
         const newBubbles: Bubble[] = [];
         const usedDotPositions: { x: number; y: number }[] = [];
         const usedBubblePositions: { x: number; y: number; width: number; height: number }[] = [];
-  
+
         const hasContentRegions = contentRegions && contentRegions.length > 0;
         const hasEmptyRegions = emptyRegions && emptyRegions.length > 0;
-  
-        // 预先转换为容器像素矩形，便于重叠检测与加分
-        const contentBoxesPx = hasContentRegions
-          ? contentRegions.map(r =>
-              regionToContainerRect(r, containerWidth, containerHeight, imageDimensions.width, imageDimensions.height)
-            )
-          : [];
-        const emptyBoxesPx = hasEmptyRegions
-          ? emptyRegions.map(r =>
-              regionToContainerRect(r, containerWidth, containerHeight, imageDimensions.width, imageDimensions.height)
-            )
-          : [];
-  
+
+        console.log('ImageBubbles数据:', {
+          hasContentRegions,
+          contentRegionsCount: contentRegions?.length,
+          hasEmptyRegions,
+          emptyRegionsCount: emptyRegions?.length,
+          sentencesCount: sentences.length,
+          containerWidth,
+          containerHeight
+        });
+
         // 为每个句子生成气泡
         sentences.forEach((sentence, index) => {
           let bestPosition: { dotX: number; dotY: number; bubbleX: number; bubbleY: number } | null = null;
@@ -322,20 +272,12 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
 
             const candidateBox = { x: bubbleX, y: bubbleY, width: bubbleSize.bubbleWidth, height: bubbleSize.bubbleHeight };
 
-            // 与已用气泡或内容区域重叠，回退到智能分布
+            // 检查和已用气泡是否重叠，重叠则回退到智能分布
             let overlap = false;
             for (const used of usedBubblePositions) {
               if (isPositionOverlapping(candidateBox, used)) {
                 overlap = true;
                 break;
-              }
-            }
-            if (!overlap) {
-              for (const box of contentBoxesPx) {
-                if (isPositionOverlapping(candidateBox, box)) {
-                  overlap = true;
-                  break;
-                }
               }
             }
 
@@ -346,31 +288,21 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
                 containerWidth,
                 containerHeight,
                 usedBubblePositions,
-                sentence,
-                contentBoxesPx,
-                emptyBoxesPx,
-                ctxRef.current,
-                imageDimensions.width,
-                imageDimensions.height
+                sentence
               );
               bubbleX = fallback.bubbleX;
               bubbleY = fallback.bubbleY;
               bubbleSize = { bubbleWidth: fallback.width, bubbleHeight: fallback.height };
             }
           } else {
-            // 无空白区域或索引不足，使用增强的回退策略
+            // 无空白区域或索引不足，使用回退策略
             const fallback = calculateBubblePosition(
               dotX,
               dotY,
               containerWidth,
               containerHeight,
               usedBubblePositions,
-              sentence,
-              contentBoxesPx,
-              emptyBoxesPx,
-              ctxRef.current,
-              imageDimensions.width,
-              imageDimensions.height
+              sentence
             );
             bubbleX = fallback.bubbleX;
             bubbleY = fallback.bubbleY;
@@ -507,30 +439,10 @@ const ImageBubbles: React.FC<ImageBubblesProps> = ({
       height: img.naturalHeight || img.height
     });
     setImageLoaded(true);
-  
-    // 建立离屏 Canvas 用于采样图片空白度
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || img.width;
-      canvas.height = img.naturalHeight || img.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvasRef.current = canvas;
-        ctxRef.current = ctx;
-      } else {
-        canvasRef.current = null;
-        ctxRef.current = null;
-      }
-    } catch {
-      // 跨域图片可能导致 canvas 读取失败，降级处理
-      canvasRef.current = null;
-      ctxRef.current = null;
-    }
-  
+
     // 重置气泡状态
     setBubbles([]);
-  
+
     // 图片URL变化时重置缓存
     if (img.src !== imageUrl || imageUrl !== previousImageUrl.current) {
       previousImageUrl.current = imageUrl;

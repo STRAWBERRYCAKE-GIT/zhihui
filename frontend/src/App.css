@@ -418,6 +418,7 @@ html, body {
   font-size: 18px;
 }
 
+/* .upload-button-container */
 .upload-button-container {
   display: flex;
   flex-direction: column;
@@ -427,6 +428,7 @@ html, body {
   bottom: 0;
   padding: 12px;
   background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
+  -webkit-backdrop-filter: saturate(120%) blur(4px);
   backdrop-filter: saturate(120%) blur(4px);
   z-index: 10;
 }
@@ -845,6 +847,7 @@ html, body {
   transition: all 0.3s ease;
   box-shadow: 0 3px 10px rgba(255, 107, 107, 0.3);
   z-index: 1000;
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   transform: translateY(0);
 }
@@ -878,6 +881,7 @@ html, body {
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
   z-index: 30;
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 

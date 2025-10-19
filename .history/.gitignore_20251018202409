@@ -101,9 +101,9 @@ coverage.xml
 backend/zhihui/uploads/backend/dinov3_model/model.safetensors
 
 # 排除大模型文件
-backend/CLIP/
-backend/Chinese-CLIP/
-backend/cn_clip_model/
-backend/dinov3_model/
-backend/zhihui/uploads/
-"backend/zhihui/uploads/"
+backend/dinov3_model/"backend/Chinese-CLIP/" 
+"backend/CLIP/" 
+"backend/cn_clip_model/" 
+"backend/dinov3_model/" 
+"*.pt" 
+"backend/zhihui/uploads/" 

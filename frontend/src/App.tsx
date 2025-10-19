@@ -531,8 +531,9 @@ function App() {
                         imageUrl={selectedImage}
                         sentences={bubbleSentences}
                         isVisible={showBubbles}
-                        emptyRegions={evaluation?.emptyRegions || []}
-                        contentRegions={evaluation?.contentRegions || []}
+                        emptyRegions={evaluation?.empty_regions || evaluation?.emptyRegions || []}
+                        contentRegions={evaluation?.content_regions || evaluation?.contentRegions || []}
+                        textRegionMapping={evaluation?.text_region_mapping || []}
                       />
                       {evaluation?.filename && (
                         <div className="image-filename">

@@ -1,135 +1,64 @@
-// 文本筛选工具函数
+// 文本筛选工具函数 - 基于CLIP匹配度选择气泡内容
 export const filterEvaluationText = (evaluation: any): string[] => {
   if (!evaluation) return [];
   
-  const sentences: string[] = [];
-  
-  // 从strengths中提取句子
-  if (evaluation.strengths && Array.isArray(evaluation.strengths)) {
-    evaluation.strengths.forEach((strength: any) => {
-      if (typeof strength === 'string' && strength.trim()) {
-        sentences.push(strength.trim());
-      }
-    });
+  // 检查是否有CLIP文本区域映射数据
+  if (evaluation.text_region_mapping && Array.isArray(evaluation.text_region_mapping)) {
+    // 基于CLIP匹配度选择气泡内容（使用后端t_dyn + 上限3）
+    return selectBubblesByCLIPMatch(evaluation.text_region_mapping, evaluation.cnclip_stats);
   }
   
-  // 从suggestions中提取句子
-  if (evaluation.suggestions && Array.isArray(evaluation.suggestions)) {
-    evaluation.suggestions.forEach((suggestion: any) => {
-      if (typeof suggestion === 'string' && suggestion.trim()) {
-        sentences.push(suggestion.trim());
-      }
-    });
-  }
-  
-  // 从dimensions的comment中提取句子
-  if (evaluation.dimensions && Array.isArray(evaluation.dimensions)) {
-    evaluation.dimensions.forEach((dim: any) => {
-      if (dim && typeof dim.comment === 'string' && dim.comment.trim()) {
-        sentences.push(dim.comment.trim());
-      }
-    });
-  }
-  
-  // 去重并筛选长度合适的句子
-  const uniqueSentences = Array.from(new Set(sentences));
-  
-  // 对句子进行概括化处理
-  const processedSentences = uniqueSentences.map(sentence => {
-    return summarizeSentence(sentence);
-  }).filter(sentence => sentence.length > 0);
-  
-  // 随机选择3-5个句子
-  const count = Math.min(Math.max(3, processedSentences.length), 5);
-  const shuffled = [...processedSentences].sort(() => Math.random() - 0.5);
-  
-  return shuffled.slice(0, count);
+  // 如果没有CLIP数据，回退到原始逻辑
+  return fallbackTextSelection(evaluation);
 };
 
-// 句子概括化函数
-const summarizeSentence = (sentence: string): string => {
-  // 移除标点符号和多余空格
-  let cleaned = sentence.replace(/[，。！？；：]/g, '').trim();
-  
-  // 如果句子很短（小于15字符），直接返回
-  if (cleaned.length <= 15) {
-    return cleaned;
+// 基于CLIP匹配度选择气泡内容（精准显示）
+// 方法：selectBubblesByCLIPMatch（上限调到4，使用后端t_dyn）
+const selectBubblesByCLIPMatch = (textRegionMapping: any[], cnclipStats?: any): string[] => {
+  // 从后端动态阈值读取（允许轻微容差-0.02）；无t_dyn时默认0.4
+  const tDyn = typeof cnclipStats?.t_dyn === 'number' ? cnclipStats.t_dyn : undefined;
+  const MIN_CONFIDENCE = typeof tDyn === 'number' ? Math.max(tDyn - 0.02, 0.35) : 0.4;
+  const MAX_BUBBLES = 4; // 从3增加到4
+
+  const passed = textRegionMapping
+    .filter(m => typeof m?.confidence === 'number' && m.confidence >= MIN_CONFIDENCE)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  let selected = passed.slice(0, Math.min(MAX_BUBBLES, passed.length));
+
+  // 回退：如果一个都不过阈值，至少显示最高的1个以避免0气泡
+  if (selected.length === 0 && textRegionMapping.length > 0) {
+    const sortedAll = [...textRegionMapping].sort((a, b) => b.confidence - a.confidence);
+    selected = sortedAll.slice(0, 1);
   }
-  
-  // 如果句子很长（大于50字符），进行概括
-  if (cleaned.length > 50) {
-    return summarizeLongSentence(cleaned);
-  }
-  
-  // 中等长度句子，尝试提取关键信息
-  return extractKeyInfo(cleaned);
+
+  // 直接使用后端返回的短句，不再按标点二次拆分
+  const selectedTexts = Array.from(new Set(
+    selected
+      .map(m => (typeof m?.text === 'string' ? m.text.trim() : ''))
+      .filter(t => t.length > 0)
+  ));
+
+  console.log(`CLIP匹配选择(精准): 候选=${textRegionMapping.length}，通过阈值=${passed.length}，最终文本=${selectedTexts.length}，t_dyn=${tDyn}，阈值=${MIN_CONFIDENCE}，上限=${MAX_BUBBLES}`);
+
+  return selectedTexts;
 };
 
-// 概括长句子
-const summarizeLongSentence = (sentence: string): string => {
-  // 提取关键词和短语
-  const keywords = extractKeywords(sentence);
-  
-  // 如果有关键词，组合成简短描述
-  if (keywords.length > 0) {
-    return keywords.slice(0, 3).join('，') + '。';
-  }
-  
-  // 否则截取前30个字符
-  return sentence.substring(0, 30) + '...';
-};
+// 回退逻辑：当无CLIP数据时，从评价数据中提取文本
+const fallbackTextSelection = (evaluation: any): string[] => {
+  const strengths = evaluation.strengths || [];
+  const suggestions = evaluation.suggestions || [];
+  const dimensions = evaluation.dimensions || [];
 
-// 提取关键信息
-const extractKeyInfo = (sentence: string): string => {
-  // 移除常见的修饰词和连接词
-  const cleaned = sentence
-    .replace(/[，。！？；：]/g, '')
-    .replace(/的|了|着|过|在|是|有|和|与|及|或|但|然而|不过|因此|所以|因为|如果|虽然|尽管/g, '')
-    .trim();
-  
-  // 如果清理后仍然很长，进一步处理
-  if (cleaned.length > 25) {
-    return cleaned.substring(0, 25) + '...';
-  }
-  
-  return cleaned;
-};
-
-// 提取关键词
-const extractKeywords = (sentence: string): string[] => {
-  const keywords: string[] = [];
-  
-  // 常见的评价关键词
-  const keyPatterns = [
-    /构图[^，。！？；：]*/g,
-    /线条[^，。！？；：]*/g,
-    /光影[^，。！？；：]*/g,
-    /细节[^，。！？；：]*/g,
-    /比例[^，。！？；：]*/g,
-    /透视[^，。！？；：]*/g,
-    /色彩[^，。！？；：]*/g,
-    /质感[^，。！？；：]*/g,
-    /结构[^，。！？；：]*/g,
-    /表现[^，。！？；：]*/g,
-    /需要[^，。！？；：]*/g,
-    /建议[^，。！？；：]*/g,
-    /改进[^，。！？；：]*/g,
-    /加强[^，。！？；：]*/g,
-    /注意[^，。！？；：]*/g
+  // 合并所有文本来源
+  const allTexts = [
+    ...strengths.filter((s: any) => typeof s === 'string'),
+    ...suggestions.filter((s: any) => typeof s === 'string'),
+    ...dimensions
+      .filter((d: any) => d && typeof d.comment === 'string')
+      .map((d: any) => d.comment)
   ];
-  
-  keyPatterns.forEach(pattern => {
-    const matches = sentence.match(pattern);
-    if (matches) {
-      matches.forEach(match => {
-        if (match.length <= 20 && match.length >= 4) {
-          keywords.push(match.trim());
-        }
-      });
-    }
-  });
-  
-  return keywords;
-};
 
-export default filterEvaluationText;
+  // 去重并截取前3个
+  return Array.from(new Set(allTexts.map(t => t.trim()).filter(t => t.length > 0))).slice(0, 3);
+};
