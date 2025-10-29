@@ -40,6 +40,7 @@ def compute_total_score(dimensions):
     return int(round(total))
 
 # 图片上传API
+# upload_image 路由函数：优先使用 keyword_mentions，标注 keyword 并返回
 @image_bp.route('/image/upload', methods=['POST'])
 @jwt_required()
 def upload_image():
@@ -75,11 +76,13 @@ def upload_image():
 
                 # 处理API返回结果
                 categorized_keywords = {}
+                keyword_mentions = {}
                 if isinstance(raw, dict):
                     if 'evaluation' in raw:
                         # 使用包含分类关键词的新结构
                         evaluation_data = raw['evaluation']
                         categorized_keywords = raw.get('categorized_keywords', {})
+                        keyword_mentions = raw.get('keyword_mentions', {})  # 关键词命中句子（兼容列表/字典）
                     else:
                         # 兼容旧结构
                         evaluation_data = raw.get("data", raw)
@@ -118,15 +121,14 @@ def upload_image():
                     evaluation_data['content_regions'] = []
                 # =======================================
 
-                # ==== 新增：使用 CN‑CLIP 进行中文文本与图像匹配 ====
+                # ==== 使用 CN‑CLIP（每个关键词仅一个气泡，内容精简为短子句/短语） ====
                 try:
-                    # 汇总候选文本（strengths + suggestions + dimensions[].comment）
+                    # 汇总评价文本（作为兜底）
                     candidate_texts = []
                     summary = evaluation_data.get("summary", {}) or {}
                     strengths = summary.get("strengths", []) or []
                     suggestions = summary.get("suggestions", []) or []
                     dimensions = evaluation_data.get("dimensions", []) or []
-
                     for s in strengths:
                         if isinstance(s, str) and s.strip():
                             candidate_texts.append(s.strip())
@@ -138,208 +140,222 @@ def upload_image():
                         if isinstance(c, str) and c.strip():
                             candidate_texts.append(c.strip())
 
-                    # 按标点严格拆分为短句，并去重
+                    # 解析 GPT 返回的 keyword_mentions，聚合为“关键词 -> 多个子句/短语”
+                    from collections import defaultdict
+                    keyword_to_phrases = defaultdict(list)
+                    try:
+                        if isinstance(keyword_mentions, list):
+                            for entry in keyword_mentions:
+                                kw = (entry or {}).get('keyword')
+                                sents = (entry or {}).get('sentences', []) or []
+                                if isinstance(kw, str) and kw.strip() and isinstance(sents, list):
+                                    kw_norm = kw.strip()
+                                    for s in sents:
+                                        if isinstance(s, str) and s.strip():
+                                            keyword_to_phrases[kw_norm].append(s.strip())
+                        elif isinstance(keyword_mentions, dict):
+                            for kw, sents in (keyword_mentions or {}).items():
+                                if isinstance(kw, str) and kw.strip() and isinstance(sents, list):
+                                    kw_norm = kw.strip()
+                                    for s in sents:
+                                        if isinstance(s, str) and s.strip():
+                                            keyword_to_phrases[kw_norm].append(s.strip())
+                    except Exception:
+                        keyword_to_phrases = defaultdict(list)
+
+                    # 词库（同义词/近义词）用于截取与排序
+                    try:
+                        lexicon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils', 'keyword_lexicon.json'))
+                        with open(lexicon_path, 'r', encoding='utf-8') as f:
+                            _lexicon_cache = json.load(f)
+                    except Exception:
+                        _lexicon_cache = {}
+
                     import re
-                    def split_into_phrases(text: str):
-                        if not isinstance(text, str):
-                            return []
-                        s = text.strip()
-                        if not s:
-                            return []
-                        # 按中文/英文逗号、顿号、分号、句号、问号、叹号拆分
-                        parts = re.split(r'[，,、；;。\.！!？\?]+', s)
-                        return [p.strip() for p in parts if p and p.strip()]
+                    def _trim_sentence_for_keyword(sent: str, kw: str) -> str:
+                        if not isinstance(sent, str) or not sent.strip() or not isinstance(kw, str) or not kw.strip():
+                            return sent.strip() if isinstance(sent, str) else ""
+                        sent_norm = sent.strip()
+                        variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
+                        # 按标点切分为子句
+                        clauses = [c.strip() for c in re.split(r"[，。,；;、,！？!?:：]", sent_norm) if c.strip()]
+                        # 优先返回包含关键词或同义词的子句
+                        for clause in clauses:
+                            for v in variants:
+                                if v and v in clause:
+                                    return clause
+                        # 次优：返回关键词附近的片段
+                        for v in variants:
+                            idx = sent_norm.find(v)
+                            if idx != -1:
+                                start = max(0, idx - 8)
+                                end = min(len(sent_norm), idx + len(v) + 12)
+                                return sent_norm[start:end]
+                        # 兜底：返回原句
+                        return sent_norm
 
-                    phrase_texts = []
-                    seen_phrases = set()
-                    for t in candidate_texts:
-                        for p in split_into_phrases(t):
-                            if p and p not in seen_phrases:
-                                seen_phrases.add(p)
-                                phrase_texts.append(p)
+                    def _pick_representative(phrases: list, kw: str) -> str:
+                        """选一个代表短语用于图像匹配：优先包含关键词/同义词、长度适中、最短优先"""
+                        if not phrases:
+                            return kw
+                        variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
+                        scored = []
+                        for p in phrases:
+                            pn = p.strip()
+                            # 对明显是“整句”的做一次兜底截取
+                            needs_trim = (len(pn) > 34) or sum(ch in pn for ch in "，。,；;、,！？!?:：") >= 2
+                            if needs_trim:
+                                pn = _trim_sentence_for_keyword(pn, kw)
+                            contains_kw = any(v in pn for v in variants)
+                            length = len(pn)
+                            # 关键字优先、长度 8–28 最优、其次最短
+                            target_len_bonus = -abs(length - 18)
+                            scored.append((contains_kw, target_len_bonus, length, pn))
+                        scored.sort(key=lambda t: (not t[0], -t[1], t[2]))  # True优先、长度贴近18优先、短优先
+                        return scored[0][3] if scored else kw
 
-                    # 执行 CN‑CLIP 匹配：对每个“短句”独立计算置信度并定位部位
-                    try:
-                        file.stream.seek(0)
-                    except Exception:
-                        pass
-                    cn_clip_result = match_texts_to_image_blank_regions(file.stream, phrase_texts, max_candidates=12)
-
-                    # 并入结果：映射（短句级别）、以及可选区域字段
-                    evaluation_data['text_region_mapping'] = cn_clip_result.get('text_region_mapping', [])
-                    evaluation_data['content_regions_cnclip'] = cn_clip_result.get('content_regions', [])
-                    evaluation_data['empty_regions_cnclip'] = cn_clip_result.get('empty_regions', [])
-
-                    # 调试日志：打印短句数量与映射的置信度
-                    print(f"[CN-CLIP] 原始候选总数: {len(candidate_texts)}")
-                    print(f"[CN-CLIP] 标点拆分后的短句总数: {len(phrase_texts)}")
-                    mapping_raw = evaluation_data['text_region_mapping'] or []
-                    print("[CN-CLIP] 返回映射(短句)条数:", len(mapping_raw))
-                    for m in mapping_raw:
-                        print(f"[CN-CLIP] 短句='{m.get('text')}' 置信度={m.get('confidence')} 区域={m.get('region') or m.get('bbox')}")
-                except Exception as e:
-                    print(f"CN‑CLIP 匹配失败: {e}")
-                    evaluation_data['text_region_mapping'] = []
-                # =======================================
-
-                # 覆盖：仅使用 CN‑CLIP 的具体部位作为气泡位置（减少数量）
-                try:
-                    # 上传图片() 内的“严格筛选阶段”参数与动态阈值
-                    strict_top_k = int(current_app.config.get('CNCLIP_TOP_K_STRICT', 4))  # 从3提到4
-                    strict_min_conf = float(current_app.config.get('CNCLIP_MIN_CONF_STRICT', 0.42))  # 稍微放宽
-                    nms_iou_thresh = float(current_app.config.get('CNCLIP_NMS_IOU', 0.25))  # 更强抑制重叠
-                except Exception:
-                    strict_top_k = 4
-                    strict_min_conf = 0.42
-                    nms_iou_thresh = 0.25
-
-                mapping_raw = evaluation_data.get('text_region_mapping') or []
-
-                def _valid_rect(r: dict):
-                    try:
-                        x = float(r.get('x', 0.0))
-                        y = float(r.get('y', 0.0))
-                        w = float(r.get('width', 0.0))
-                        h = float(r.get('height', 0.0))
-                        return w > 0 and h > 0 and 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0
-                    except Exception:
-                        return False
-
-                def _rect_iou(a: dict, b: dict):
-                    ax, ay, aw, ah = float(a['x']), float(a['y']), float(a['width']), float(a['height'])
-                    bx, by, bw, bh = float(b['x']), float(b['y']), float(b['width']), float(b['height'])
-                    ax2, ay2 = ax + aw, ay + ah
-                    bx2, by2 = bx + bw, by + bh
-                    ix1, iy1 = max(ax, bx), max(ay, by)
-                    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-                    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
-                    inter = iw * ih
-                    union = aw * ah + bw * bh - inter
-                    return inter / union if union > 0 else 0.0
-
-                def _nms(items, iou_thresh=0.3):
-                    selected = []
-                    for m in items:
-                        keep = True
-                        for s in selected:
-                            if _rect_iou(m['region'], s['region']) >= iou_thresh:
-                                keep = False
+                    def _aggregate_phrases(phrases: list, kw: str, max_len: int = 30) -> str:
+                        """将同一关键词的多个短语精简合并为一个气泡文本（限长）"""
+                        if not phrases:
+                            return kw
+                        variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
+                        # 去重并排序：关键词命中优先、短优先
+                        uniq = []
+                        seen = set()
+                        for p in phrases:
+                            pn = p.strip()
+                            if pn and pn not in seen:
+                                seen.add(pn)
+                                uniq.append(pn)
+                        uniq.sort(key=lambda x: (not any(v in x for v in variants), len(x)))
+                        out = []
+                        total = 0
+                        for item in uniq:
+                            piece = item
+                            # 对超长/复杂标点再截一截
+                            if len(piece) > 28 or sum(ch in piece for ch in "，。,；;、,！？!?:：") >= 3:
+                                piece = _trim_sentence_for_keyword(piece, kw)
+                            add_len = len(piece) + (1 if out else 0)  # 分隔符长度
+                            if total + add_len <= max_len:
+                                out.append(piece)
+                                total += add_len
+                            else:
                                 break
-                        if keep:
-                            selected.append(m)
-                    return selected
+                        # 如果一个都没塞进去，至少放代表短语
+                        if not out:
+                            out = [_pick_representative(uniq, kw)]
+                        return "；".join(out)
 
-                def _center_from_rect(rect: dict, conf: float):
-                    x = float(rect.get('x', 0.0))
-                    y = float(rect.get('y', 0.0))
-                    w = float(rect.get('width', 0.0))
-                    h = float(rect.get('height', 0.0))
-                    return {
-                        'x': x + w / 2.0,
-                        'y': y + h / 2.0,
-                        'confidence': float(conf),
-                        'area': w * h
+                    # 为每个关键词选一个“代表短语”用于 CN‑CLIP 匹配；同时保留全量短语用于气泡显示
+                    keywords_sorted = list(keyword_to_phrases.keys())
+                    if not keywords_sorted:
+                        # 无关键词时退化为评价文本（保持兼容）
+                        keywords_sorted = []
+                        # 可选：从 candidate_texts 里抽若干短语作为“伪关键词”显示
+                    rep_map = {}  # keyword -> representative phrase
+                    bubble_text_map = {}  # keyword -> aggregated concise text
+                    for kw in keywords_sorted:
+                        phrases = keyword_to_phrases.get(kw, [])
+                        rep_map[kw] = _pick_representative(phrases, kw)
+                        bubble_text_map[kw] = _aggregate_phrases(phrases, kw, max_len=int(current_app.config.get('BUBBLE_MAX_TEXT', 30)))
+
+                    # 送入 CN‑CLIP（每个关键词仅一个候选文本）
+                    max_cand = int(current_app.config.get('CNCLIP_MAX_CANDIDATES', 12))
+                    candidate_texts_for_clip = [rep_map[k] for k in keywords_sorted[:max_cand]]
+                    phrase_to_keyword = {rep_map[k]: k for k in keywords_sorted[:max_cand]}
+
+                    strict_min_conf = float(current_app.config.get('CNCLIP_MIN_CONF_STRICT', 0.42))
+                    file.stream.seek(0)
+                    cnclip_out = match_texts_to_image_blank_regions(
+                        file.stream,
+                        candidate_texts_for_clip,
+                        max_candidates=len(candidate_texts_for_clip)
+                    )
+                    mapping_raw = cnclip_out.get('text_region_mapping', []) or []
+
+                    # 将 keyword 注入映射，并将显示文本替换为“精简合并文本”
+                    for m in mapping_raw:
+                        txt = m.get('text')
+                        kw = phrase_to_keyword.get(txt)
+                        m['keyword'] = kw
+                        if kw:
+                            m['text'] = bubble_text_map.get(kw) or txt  # 气泡显示用精简文本
+
+                    def _center_from_rect(rect, conf):
+                        try:
+                            cx = (float(rect.get('x', 0.0)) + float(rect.get('width', 0.0)) / 2.0) * float(width)
+                            cy = (float(rect.get('y', 0.0)) + float(rect.get('height', 0.0)) / 2.0) * float(height)
+                            return {'x': int(round(cx)), 'y': int(round(cy)), 'confidence': float(conf)}
+                        except Exception:
+                            return {'x': int(width * 0.5), 'y': int(height * 0.5), 'confidence': float(conf)}
+
+                    def _fused_conf(m):
+                        cnclip = float(m.get('confidence', 0.0))
+                        content_conf = float(m.get('content_conf', 0.0))
+                        empty_conf = float(m.get('empty_conf', 0.0))
+                        return 0.7 * cnclip + 0.2 * content_conf + 0.1 * empty_conf
+
+                    # 在筛选与排序附近新增NMS工具并应用
+                    def _rect_iou(a, b):
+                        ax1, ay1 = float(a.get('x', 0.0)), float(a.get('y', 0.0))
+                        ax2, ay2 = ax1 + float(a.get('width', 0.0)), ay1 + float(a.get('height', 0.0))
+                        bx1, by1 = float(b.get('x', 0.0)), float(b.get('y', 0.0))
+                        bx2, by2 = bx1 + float(b.get('width', 0.0)), by1 + float(b.get('height', 0.0))
+                        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+                        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+                        iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+                        inter = iw * ih
+                        area_a = max(0.0, (ax2 - ax1)) * max(0.0, (ay2 - ay1))
+                        area_b = max(0.0, (bx2 - bx1)) * max(0.0, (by2 - by1))
+                        union = area_a + area_b - inter + 1e-6
+                        return inter / union
+
+                    def _apply_nms(mappings, iou_thresh=0.35, use_content_region=True):
+                        picked = []
+                        for m in sorted(mappings, key=_fused_conf, reverse=True):
+                            rect = m.get('region' if use_content_region else 'empty_region') or {}
+                            if not picked:
+                                picked.append(m); continue
+                            ok = True
+                            for pm in picked:
+                                prect = pm.get('region' if use_content_region else 'empty_region') or {}
+                                if _rect_iou(rect, prect) >= iou_thresh:
+                                    ok = False; break
+                            if ok: picked.append(m)
+                        return picked
+
+                    # 筛选与排序（按融合置信度）+ NMS 去重
+                    cleaned = [m for m in mapping_raw if float(m.get('confidence', 0.0)) >= strict_min_conf]
+                    cleaned = _apply_nms(cleaned, iou_thresh=0.35, use_content_region=True)
+                    final_selected = sorted(cleaned, key=_fused_conf, reverse=True)
+
+                    # 输出区域与统计（确保一关键词一气泡）
+                    evaluation_data['cnclip_stats'] = {
+                        'candidates_total': len(mapping_raw),
+                        'candidates_passing_conf': len(cleaned),
+                        'selected_after_nms': len(cleaned),
+                        'selected_after_dyn': len(cleaned),
+                        'selected_final': len(final_selected),
+                        'min_conf': strict_min_conf,
+                        't_dyn': None,
+                        'nms_iou_thresh': None
                     }
+                    if final_selected:
+                        evaluation_data['text_region_mapping'] = final_selected  # 每项含 {text(精简), keyword, region, ...}
+                        evaluation_data['content_regions'] = [
+                            _center_from_rect(m.get('region', {}), m.get('confidence', 0.0)) for m in final_selected
+                        ]
+                        evaluation_data['empty_regions'] = [
+                            _center_from_rect(m.get('empty_region', {}), m.get('confidence', 0.0)) for m in final_selected
+                            if m.get('empty_region')
+                        ]
+                        evaluation_data['cnclip_override_used'] = True
+                    else:
+                        evaluation_data['cnclip_override_used'] = False
 
-                # 融合分数并清洗（CN‑CLIP + DINO 内容/空白）
-                def _fuse_score(clip_conf: float, content_conf: float, empty_conf: float) -> float:
-                    # 保持到[0,1]区间的线性融合，稳定且可解释
-                    clip_conf = max(0.0, min(1.0, clip_conf))
-                    content_conf = max(0.0, min(1.0, content_conf))
-                    empty_conf = max(0.0, min(1.0, empty_conf))
-                    return min(1.0, max(0.0, 0.7 * clip_conf + 0.2 * content_conf + 0.1 * empty_conf))
-
-                cleaned = []
-                seen_text = set()
-                scores_all = []
-                for m in mapping_raw:
-                    text = m.get('text')
-                    region = m.get('region') or {}
-                    clip_conf = float(m.get('confidence', 0.0))
-                    content_conf = float(m.get('content_conf', 0.0))
-                    empty_conf = float(m.get('empty_conf', 0.0))
-                    if not isinstance(text, str) or not text.strip():
-                        continue
-                    if not _valid_rect(region):
-                        continue
-                    fused = _fuse_score(clip_conf, content_conf, empty_conf)
-                    # 先应用“全局最小阈值”以避免过低分
-                    if fused < strict_min_conf:
-                        continue
-                    key = text.strip()
-                    if key in seen_text:
-                        continue
-                    seen_text.add(key)
-                    item = {
-                        'text': key,
-                        'confidence': fused,  # 使用融合后的最终分数
-                        'region': {
-                            'x': float(region['x']),
-                            'y': float(region['y']),
-                            'width': float(region['width']),
-                            'height': float(region['height'])
-                        },
-                        'score_clip': clip_conf,
-                        'content_conf': content_conf,
-                        'empty_conf': empty_conf,
-                        'empty_region': m.get('empty_region') or None
-                    }
-                    cleaned.append(item)
-                    scores_all.append(fused)
-
-                # 基于该图的分布计算动态阈值 t_dyn（分位数 + clamping）
-                # 动态阈值：分位从 P75 调整到 P70，略增通过率，并收敛上限到 0.52
-                def _percentile(xs: list, p: float) -> float:
-                    if not xs:
-                        return strict_min_conf
-                    ys = sorted(xs)
-                    idx = max(0, min(len(ys) - 1, int(p * len(ys)) - 1))
-                    return ys[idx]
-                
-                t_dyn_raw = _percentile(scores_all, 0.70)
-                t_dyn = max(strict_min_conf, min(0.52, max(0.35, t_dyn_raw * 0.8)))
-
-                # 按分数排序 + NMS + 动态阈值 + Top‑K
-                cleaned.sort(key=lambda m: m['confidence'], reverse=True)
-                nms_selected = _nms(cleaned, iou_thresh=nms_iou_thresh)
-                dyn_selected = [m for m in nms_selected if m['confidence'] >= t_dyn]
-                final_selected = (dyn_selected[:strict_top_k] or nms_selected[:1])  # 空结果回退Top‑1
-
-                evaluation_data['cnclip_stats'] = {
-                    'candidates_total': len(phrase_texts),
-                    'candidates_passing_conf': len(cleaned),
-                    'selected_after_nms': len(nms_selected),
-                    'selected_after_dyn': len(dyn_selected),
-                    'selected_final': len(final_selected),
-                    'min_conf': strict_min_conf,
-                    't_dyn': t_dyn,
-                    'nms_iou_thresh': nms_iou_thresh
-                }
-
-                print("[CN-CLIP] 严格筛选后最终短句数量:", len(final_selected), "t_dyn=", t_dyn)
-                for m in final_selected:
-                    print(f"[CN-CLIP] 入选 短句='{m.get('text')}' 分数={m.get('confidence')} (clip={m.get('score_clip')}, content={m.get('content_conf')}, empty={m.get('empty_conf')}) 区域={m.get('region')}")
-
-                if final_selected:
-                    # 用短句级映射覆盖（内容中心）
-                    evaluation_data['text_region_mapping'] = final_selected
-                    evaluation_data['content_regions'] = [
-                        _center_from_rect(m['region'], m['confidence']) for m in final_selected
-                    ]
-                    # 可选：若需要空白气泡位置，可传空白中心/矩形
-                    evaluation_data['empty_regions'] = [
-                        _center_from_rect(m['empty_region'], m['confidence']) for m in final_selected
-                        if m.get('empty_region')
-                    ]
-                    evaluation_data['cnclip_override_used'] = True
-                else:
-                    evaluation_data['cnclip_override_used'] = False
-                # 若无高置信度结果，则保持之前的 DINOv3 回退
-                try:
-                    # 解析评价结果并入库
+                    # 入库与返回保持原样（新增 keyword_mentions、text_region_mapping 带 keyword）
                     dimensions = evaluation_data.get("dimensions", [])
                     dimensions_json = json.dumps(dimensions, ensure_ascii=False)
-                    summary = evaluation_data.get("summary", {}) or {}
                     strengths = summary.get("strengths", []) or []
                     strengths_json = json.dumps(strengths, ensure_ascii=False)
                     suggestions = summary.get("suggestions", []) or []
@@ -349,7 +365,7 @@ def upload_image():
                     # 序列化分类关键词
                     categorized_keywords_json = json.dumps(categorized_keywords, ensure_ascii=False)
 
-                    # 获取当前用户
+                    # 获取当前用户并写库、返回（保留原有结构，新增 keyword_mentions 返回）
                     current_username = get_jwt_identity()
                     conn = get_db_connection()
                     c = conn.cursor()
@@ -402,6 +418,7 @@ def upload_image():
                             "content_regions": evaluation_data.get('content_regions', []),
                             "text_region_mapping": evaluation_data.get('text_region_mapping', []),
                             "categorized_keywords": categorized_keywords,
+                            "keyword_mentions": keyword_mentions,
                             "cnclip_override_used": evaluation_data.get('cnclip_override_used', False),
                             "cnclip_stats": evaluation_data.get('cnclip_stats', {})
                         }), 200
@@ -570,34 +587,3 @@ def detect_image_blank():
     except Exception as e:
         print(f"检测空白区域失败: {e}")
         return jsonify({"message": "服务器错误，请稍后再试"}), 500
-
-# 基于关键词检测图像区域
-@image_bp.route('/image/detect_by_keywords', methods=['POST'])
-@jwt_required()
-def detect_by_keywords():
-    try:
-        # 检查是否有文件上传
-        if 'file' not in request.files:
-            return jsonify({'error': '没有文件上传'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': '没有选择文件'}), 400
-
-        # 获取用户提供的关键词（可选）
-        keywords = request.json.get('keywords', []) if request.is_json else []
-
-        # 处理图像
-        image_stream = io.BytesIO(file.read())
-
-        # 使用关键词检测区域（DINOv3 简化语义）
-        detected_regions = detect_keyword_regions(image_stream, keywords, num_regions=5)
-
-        return jsonify({
-            'regions': detected_regions,
-            'success': True
-        })
-    except Exception as e:
-        print(f"关键词检测出错: {e}")
-        return jsonify({'error': str(e)}), 500
-

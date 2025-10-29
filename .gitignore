@@ -107,3 +107,9 @@ backend/cn_clip_model/
 backend/dinov3_model/
 backend/zhihui/uploads/
 "backend/zhihui/uploads/"
+/Chinese-CLIP/
+/CLIP/
+/cn_clip_model/
+/uploads/
+/dinov3_model/
+/.history/

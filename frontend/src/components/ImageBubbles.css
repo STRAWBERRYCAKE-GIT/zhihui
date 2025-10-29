@@ -6,7 +6,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: visible; /* 确保气泡不被裁剪 */
+  overflow: hidden; /* 修复：气泡完全包含在图片框内 */
   border-radius: 8px;
 }
 
@@ -17,24 +17,24 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: visible; /* 确保气泡不被裁剪 */
+  overflow: hidden; /* 修复：避免内部元素外溢 */
 }
 
-/* 将之前的.evaluation-image样式替换为以下内容 */
+/* 图片样式 */
 .evaluation-image {
-  height: 70vh; /* 设置固定高度为视口高度的70% */
-  width: auto; /* 宽度自动计算，保持原始比例 */
-  max-width: 90%; /* 限制最大宽度，防止宽图溢出 */
+  height: 70vh;
+  width: auto;
+  max-width: 90%;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* 圆点标注样式 */
+/* 旧圆点样式（保留） */
 .bubble-dot {
   position: absolute;
-  width: 16px; /* 增加圆点尺寸 */
-  height: 16px; /* 增加圆点尺寸 */
+  width: 16px;
+  height: 16px;
   background: #FF7A45;
   border-radius: 50%;
   border: 3px solid white;
@@ -42,7 +42,7 @@
   transform: translate(-50%, -50%);
   animation: dotAppear 0.4s ease-out forwards;
   opacity: 0;
-  z-index: 9998; /* 仅次于气泡的层级 */
+  z-index: 9998;
 }
 
 @keyframes dotAppear {
@@ -56,37 +56,59 @@
   }
 }
 
-/* 连接线样式 */
+/* 旧连接线容器（保留） */
 .bubble-line {
   position: absolute;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 9997; /* 连接线层级 */
+  z-index: 9997;
   animation: lineAppear 0.3s ease-out forwards;
   opacity: 0;
 }
 
 @keyframes lineAppear {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 0.8;
-  }
+  0% { opacity: 0; }
+  100% { opacity: 0.8; }
 }
 
-/* 新气泡主体样式 - 位于图片边缘 */
+/* 新增：SVG连接层与样式 */
+.bubble-connector-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9996;
+}
+
+.connector-line {
+  stroke: #FF7A45;
+  stroke-width: 2;
+  stroke-dasharray: 10 6;
+  opacity: 0.85;
+}
+
+.connector-dot {
+  fill: #FF7A45;
+  stroke: #FFFFFF;
+  stroke-width: 3;
+  filter: drop-shadow(0 2px 4px rgba(255, 122, 69, 0.4));
+}
+
+/* 气泡主体样式 */
 .evaluation-bubble-new {
   position: absolute;
   background: rgba(255, 122, 69, 0.95);
   color: white;
-  padding: 10px 14px; /* 内边距 */
+  padding: 10px 14px;
+  padding-top: 24px; /* 修复：为内部关键词标签预留空间 */
   border-radius: 16px;
-  font-size: 13px; /* 字体大小 */
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.4; /* 行高 */
-  min-width: 160px; /* 最小宽度 */
+  line-height: 1.4;
+  min-width: 160px;
   box-shadow: 0 4px 12px rgba(255, 122, 69, 0.3);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -94,10 +116,10 @@
   transform: translate(-50%, -50%);
   animation: bubbleAppearNew 0.6s ease-out forwards;
   opacity: 0;
-  z-index: 9999; /* 最高层级，确保显示在最上层 */
+  z-index: 9999;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  margin: 10px;
+  margin: 0; /* 修复：移除外部 margin，避免外溢 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,7 +137,6 @@
   }
 }
 
-/* 气泡内容样式 */
 .bubble-content {
   text-align: center;
   overflow: visible;
@@ -123,7 +144,7 @@
   min-height: 20px;
 }
 
-/* 旧气泡样式 - 保留作为备用 */
+/* 旧气泡样式（保留） */
 .evaluation-bubble {
   position: absolute;
   background: rgba(255, 122, 69, 0.95);
@@ -160,6 +181,7 @@
   }
 }
 
+/* 旧尾巴保留（未在新气泡中使用） */
 .bubble-tail {
   position: absolute;
   bottom: -8px;
@@ -172,10 +194,10 @@
   border-top: 8px solid rgba(255, 122, 69, 0.95);
 }
 
-/* 关键词标签样式 */
+/* 关键词标签样式（移动到气泡内部） */
 .bubble-keyword-tag {
   position: absolute;
-  top: -10px;
+  top: 4px; /* 修复：置于气泡内部 */
   left: 50%;
   transform: translateX(-50%);
   background: #4CAF50;
@@ -187,11 +209,11 @@
   white-space: nowrap;
 }
 
-/* 响应式设计 */
+/* 响应式 */
 @media (max-width: 768px) {
   .evaluation-bubble-new {
     font-size: 12px;
-    min-width: 140px; /* 移动端最小宽度 */
+    min-width: 140px;
   }
 }
 
@@ -199,6 +221,80 @@
   .evaluation-bubble-new {
     font-size: 11px;
     padding: 8px 12px;
-    min-width: 120px; /* 小屏移动端最小宽度 */
+    padding-top: 20px;
+    min-width: 120px;
   }
+}
+
+/* 红色文字 + 白色细描边 + 阴影提升可读性 */
+.bubble .bubble-text {
+  position: relative;
+  color: #d60000;                 /* 保持红色 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* 细描边（WebKit 支持，其他浏览器用阴影兜底） */
+  -webkit-text-stroke: 0.8px rgba(255, 255, 255, 0.95);
+
+  /* 多重阴影模拟描边，防止与背景线条重合时不清晰 */
+  text-shadow:
+    0 0 1px rgba(255, 255, 255, 0.95),
+    0 0 2px rgba(255, 255, 255, 0.85),
+    0 0 3px rgba(0, 0, 0, 0.45);
+}
+
+/* 辅助叠加层：使用 mix-blend-mode:difference 提升与背景的自适应对比（不改变红色本体） */
+.bubble .bubble-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  /* 使用差值混合产生与背景的对比增强 */
+  mix-blend-mode: difference;
+  opacity: 0.25;
+
+  /* 叠加层不需要颜色描边，避免改变红色本体的视觉 */
+  color: #ffffff;
+  -webkit-text-stroke: 0px transparent;
+  text-shadow: none;
+}
+
+/* 红色为主，白色描边仅作轻微对比增强 */
+.bubble .bubble-text {
+  position: relative;
+  color: #d60000;              /* 文字填充保持红色 */
+  font-weight: 700;            /* 更粗，提升可读性 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* 显式指定红色填充，避免被描边“覆盖”的视觉误判 */
+  -webkit-text-fill-color: #d60000;
+
+  /* 将白色描边变细并降低不透明度（更轻、更不抢眼） */
+  -webkit-text-stroke: 0.6px rgba(255, 255, 255, 0.8);
+
+  /* 用轻微的发光型阴影代替大面积白色外描边 */
+  text-shadow:
+    0 0 0.6px rgba(255, 255, 255, 0.55),   /* 贴边柔和白光 */
+    0 0 1.2px rgba(255, 255, 255, 0.30),   /* 次级白光，避免过亮 */
+    0 0 1.2px rgba(0, 0, 0, 0.18);         /* 轻微暗边，提升轮廓 */
+  /* 更鲜亮的红色为主色 */
+  color: #ff2b2b;
+  -webkit-text-fill-color: #ff2b2b;
+
+  /* 更弱的白色描边，仅作为轻微对比增强 */
+  -webkit-text-stroke: 0.35px rgba(255, 255, 255, 0.55);
+
+  /* 更轻的柔光阴影，避免整体发白 */
+  text-shadow:
+    0 0 0.5px rgba(255, 255, 255, 0.40),
+    0 0 1px rgba(255, 255, 255, 0.22),
+    0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+/* 若之前添加了通过 ::after 的混合模式增强，这里关闭以保持“固定白描边”的视觉一致性 */
+.bubble .bubble-text::after {
+  content: none !important;
 }
