@@ -54,6 +54,8 @@ ALTER TABLE images ADD COLUMN text_region_mapping JSON NULL;
 pip install packaging
 pip install transformers
 pip install torch pillow numpy safetensors
+pip install openai
+pip install python-dotenv
 ```
 
 # 更新
