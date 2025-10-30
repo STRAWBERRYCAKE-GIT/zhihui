@@ -383,11 +383,16 @@ def upload_image():
                         user_id = user['id']
                         image_url = f"/image/file/{unique_filename}"
 
-                        # 写入数据库（保持既有表结构，不存 text_region_mapping）
+                        # 写入数据库（包含 text_region_mapping 和 keyword_mentions）
                         sql = """
-                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO images (user_id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords, text_region_mapping, keyword_mentions)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """
+                        
+                        # 序列化气泡映射信息
+                        text_region_mapping_json = json.dumps(evaluation_data.get('text_region_mapping', []), ensure_ascii=False)
+                        keyword_mentions_json = json.dumps(keyword_mentions, ensure_ascii=False)
+                        
                         params = (
                             user_id,
                             score,
@@ -400,7 +405,9 @@ def upload_image():
                             file.filename,
                             json.dumps(evaluation_data.get('empty_regions', []), ensure_ascii=False),
                             json.dumps(evaluation_data.get('content_regions', []), ensure_ascii=False),
-                            categorized_keywords_json
+                            categorized_keywords_json,
+                            text_region_mapping_json,
+                            keyword_mentions_json
                         )
                         c.execute(sql, params)
                         conn.commit()
@@ -499,9 +506,9 @@ def get_history():
                 user_id = user['id']
                 print(f"用户ID: {user_id}")
 
-                # 添加 categorized_keywords 字段
+                # 查询包含气泡信息的完整数据
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords, text_region_mapping, keyword_mentions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -516,6 +523,10 @@ def get_history():
                     empty_regions = json.loads(img['empty_regions']) if img['empty_regions'] else []
                     content_regions = json.loads(img['content_regions']) if img.get('content_regions') else []
                     categorized_keywords = json.loads(img['categorized_keywords']) if img.get('categorized_keywords') else {}
+                    
+                    # 解析气泡映射信息
+                    text_region_mapping = json.loads(img['text_region_mapping']) if img.get('text_region_mapping') else []
+                    keyword_mentions = json.loads(img['keyword_mentions']) if img.get('keyword_mentions') else {}
 
                     result.append({
                         "id": img['id'],
@@ -529,7 +540,9 @@ def get_history():
                         "original_name": img['original_name'],
                         "empty_regions": empty_regions,
                         "content_regions": content_regions,
-                        "categorized_keywords": categorized_keywords
+                        "categorized_keywords": categorized_keywords,
+                        "text_region_mapping": text_region_mapping,
+                        "keyword_mentions": keyword_mentions
                     })
 
                 return jsonify({
@@ -543,6 +556,66 @@ def get_history():
     except Exception as e:
         print(f"获取历史记录失败: {e}")
         return jsonify({"message": "服务器错误，请稍后再试"}), 500
+
+# 删除历史记录API
+@image_bp.route('/image/delete/<int:image_id>', methods=['DELETE', 'OPTIONS'])
+@jwt_required(optional=True)
+def delete_image(image_id):
+    # 处理预检请求
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        current_username = get_jwt_identity()
+        
+        # 确保DELETE请求需要认证
+        if not current_username:
+            return jsonify({"message": "需要登录"}), 401
+        
+        conn = get_db_connection()
+        try:
+            c = conn.cursor()
+            
+            # 验证图片是否属于当前用户
+            c.execute("""
+                SELECT i.id, i.filename 
+                FROM images i 
+                JOIN users u ON i.user_id = u.id 
+                WHERE u.username = %s AND i.id = %s
+            """, (current_username, image_id))
+            
+            image = c.fetchone()
+            
+            if not image:
+                return jsonify({"message": "图片不存在或无权限删除"}), 403
+            
+            # 删除物理文件
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            image_path = os.path.join(upload_folder, image['filename'])
+            
+            try:
+                if os.path.exists(image_path):
+                    os.remove(image_path)
+                    print(f"已删除文件: {image_path}")
+            except Exception as e:
+                print(f"删除文件失败: {e}")
+                # 文件删除失败不影响数据库删除
+            
+            # 删除数据库记录
+            c.execute("DELETE FROM images WHERE id = %s", (image_id,))
+            conn.commit()
+            
+            return jsonify({
+                "message": "删除成功",
+                "deleted_id": image_id
+            }), 200
+            
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"删除图片失败: {e}")
+        return jsonify({"message": "删除失败，请稍后再试"}), 500
 
 # 使用dinov3检测图片空白区域的API
 @image_bp.route('/image/detect_blank', methods=['POST'])

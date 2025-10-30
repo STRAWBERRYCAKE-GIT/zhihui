@@ -2,7 +2,7 @@ from flask_cors import CORS
 from zhihui import create_app
 
 app = create_app()
-CORS(app)
+# CORS配置已在create_app()中设置，这里不需要重复配置
 
 
 import logging

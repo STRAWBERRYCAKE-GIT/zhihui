@@ -9,8 +9,8 @@ from typing import List, Dict
 import io
 from safetensors.torch import load_file as safe_load_file
 
-# 设置模型路径 - 使用原始字符串确保Windows路径正确解析
-MODEL_PATH = r"d:\zhihui-1005\backend\dinov3_model"
+# 设置模型路径 - 使用相对路径
+MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'dinov3_model')
 
 # 自定义Lambda层实现
 class LambdaLayer(torch.nn.Module):

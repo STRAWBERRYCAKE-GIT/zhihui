@@ -282,10 +282,32 @@ function App() {
       if (!Array.isArray(emptyRegionsData)) emptyRegionsData = [];
       if (!Array.isArray(contentRegionsData)) contentRegionsData = [];
 
-      // 历史记录不包含 text_region_mapping（服务器未存储），默认空
-      const textRegionMappingData: any[] = [];
+      // 解析历史记录中的气泡映射信息
+      let textRegionMappingData = record.text_region_mapping || [];
+      
+      console.log('🔍 历史记录批注数据调试:', {
+        recordId: record.id,
+        originalName: record.original_name,
+        rawTextRegionMapping: record.text_region_mapping,
+        dataType: typeof record.text_region_mapping,
+        dataLength: record.text_region_mapping ? record.text_region_mapping.length : 0
+      });
+      
+      if (typeof textRegionMappingData === 'string') {
+        try { 
+          textRegionMappingData = JSON.parse(textRegionMappingData); 
+          console.log('✅ JSON解析成功:', textRegionMappingData);
+        } catch (e) { 
+          console.log('❌ JSON解析失败:', e);
+          textRegionMappingData = []; 
+        }
+      }
+      if (!Array.isArray(textRegionMappingData)) {
+        console.log('⚠️ 数据不是数组，重置为空数组');
+        textRegionMappingData = [];
+      }
 
-      // 设置评分与基础区域（历史项也正常显示评分/维度）
+      // 设置评分与基础区域（历史项现在也包含气泡映射信息）
       setEvaluation({
         score: record.score,
         strengths: strengthsData,
@@ -297,12 +319,19 @@ function App() {
         text_region_mapping: textRegionMappingData
       });
 
-      // 气泡文本仅使用关键词映射（历史项通常没有映射 -> 不显示气泡按钮）
+      // 气泡文本使用历史记录中的关键词映射
       const mapped = Array.isArray(textRegionMappingData)
         ? textRegionMappingData
             .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
             .filter((t: string) => t.length > 0)
         : [];
+      
+      console.log('🎈 气泡文本处理结果:', {
+        mappingCount: textRegionMappingData.length,
+        extractedTexts: mapped,
+        willShowBubbles: mapped.length > 0
+      });
+      
       setBubbleSentences(mapped);
       setShowBubbles(mapped.length > 0);
       setError(null);
@@ -319,6 +348,58 @@ function App() {
 
   // 气泡显示切换
   const toggleBubbles = () => setShowBubbles(!showBubbles);
+
+  // 删除历史记录
+  const handleDeleteImage = async (imageId: number, imageName: string) => {
+    if (!window.confirm(`确定要删除图片"${imageName}"吗？此操作不可恢复。`)) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(`/image/delete/${imageId}`);
+      
+      if (response.status === 200) {
+        // 从历史记录中移除已删除的图片
+        setHistoryRecords(prev => prev.filter(record => record.id !== imageId));
+        
+        // 如果删除的是当前显示的图片，清空显示
+        if (evaluation && historyRecords.find(r => r.id === imageId)) {
+          const currentRecord = historyRecords.find(r => r.id === imageId);
+          if (currentRecord && selectedImage && selectedImage.includes(currentRecord.filename)) {
+            setSelectedImage(null);
+            setEvaluation(null);
+            setSelectedDimension(null);
+            setShowBubbles(false);
+            setBubbleSentences([]);
+          }
+        }
+        
+        // 清理缩略图缓存
+        setThumbnails(prev => {
+          const newThumbnails = { ...prev };
+          const recordKey = imageId.toString();
+          if (newThumbnails[recordKey]) {
+            URL.revokeObjectURL(newThumbnails[recordKey]);
+            delete newThumbnails[recordKey];
+          }
+          return newThumbnails;
+        });
+        
+        alert('删除成功！');
+      }
+    } catch (err: any) {
+      console.error('删除图片失败:', err);
+      let errorMessage = '删除失败，请稍后重试';
+      if (err.response?.status === 403) {
+        errorMessage = '没有权限删除此图片';
+      } else if (err.response?.status === 401) {
+        errorMessage = '登录已过期，请重新登录';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      alert(errorMessage);
+    }
+  };
 
   // 初始化加载历史
   useEffect(() => {
@@ -378,24 +459,38 @@ function App() {
                             <div
                               key={record.id || index}
                               className="history-item"
-                              onClick={() => handleHistoryItemClick(record)}
                               onMouseEnter={() => loadThumbnail(record)}
-                              style={{ cursor: 'pointer' }}
                             >
-                              <div className="history-thumbnail">
-                                {thumbnails[record.id || record.filename] ? (
-                                  <img
-                                    src={thumbnails[record.id || record.filename]}
-                                    alt={record.filename || `历史${index + 1}`}
-                                    className="thumbnail-image"
-                                  />
-                                ) : (
-                                  <div className="thumbnail-placeholder">🖼️</div>
-                                )}
+                              <div 
+                                className="history-content"
+                                onClick={() => handleHistoryItemClick(record)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <div className="history-thumbnail">
+                                  {thumbnails[record.id || record.filename] ? (
+                                    <img
+                                      src={thumbnails[record.id || record.filename]}
+                                      alt={record.filename || `历史${index + 1}`}
+                                      className="thumbnail-image"
+                                    />
+                                  ) : (
+                                    <div className="thumbnail-placeholder">🖼️</div>
+                                  )}
+                                </div>
+                                <div className="history-filename">
+                                  {record.original_name || record.filename || `历史${index + 1}`}
+                                </div>
                               </div>
-                              <div className="history-filename">
-                                {record.filename || `历史${index + 1}`}
-                              </div>
+                              <button
+                                className="delete-button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteImage(record.id, record.original_name || record.filename || `历史${index + 1}`);
+                                }}
+                                title="删除此图片"
+                              >
+                                ×
+                              </button>
                             </div>
                           ))
                         ) : (

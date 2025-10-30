@@ -1,3 +1,8 @@
+$env:OPENAI_API_KEY="sk-..."
+
+#修改数据库
+ALTER TABLE images ADD COLUMN text_region_mapping LONGTEXT NULL AFTER content_regions;
+TABLE images ADD COLUMN keyword_mentions LONGTEXT NULL AFTER text_region_mapping;
 # CN-CLIP更新
 1.库安装
 1.1 CLIP库（可能没用到 因为真正集成的是CN-CLIP）
@@ -8,7 +13,8 @@ pip install .
 ```
 1.2 CN-CLIP库
 ```
-set LMDB_PURE=1
+pip install patch-ng
+set LMDB_PURE=1/$env:LMDB_PURE=1
 pip install cn_clip
 ```
 权重文件打包发群里（有四个大的压缩包，其中CLIP就是1.1安装下来的）

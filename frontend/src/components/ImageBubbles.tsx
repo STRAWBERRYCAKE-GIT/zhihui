@@ -766,11 +766,25 @@ export default function ImageBubbles({
 
   // 主布局计算：使用 DINO 空白与主体区域
   useEffect(() => {
-    if (!isVisible) { setBubbles([]); return; }
+    console.log('ImageBubbles useEffect triggered:', {
+      isVisible,
+      textRegionMapping,
+      containerSize,
+      imageSize
+    });
+    
+    if (!isVisible) { 
+      console.log('Not visible, clearing bubbles');
+      setBubbles([]); 
+      return; 
+    }
     const container = containerRef.current;
     const img = imageRef.current;
     const ctx = ctxRef.current;
-    if (!container || !img) return;
+    if (!container || !img) {
+      console.log('Container or image not ready');
+      return;
+    }
 
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
@@ -780,6 +794,12 @@ export default function ImageBubbles({
     const items = (textRegionMapping && textRegionMapping.length > 0)
       ? textRegionMapping.map((m) => ({ text: m.text, keyword: m.keyword, region: m.region, empty_region: m.empty_region }))
       : [];
+
+    console.log('Processing items for bubbles:', {
+      textRegionMapping,
+      items,
+      itemsLength: items.length
+    });
 
     const contentBoxes: { x: number; y: number; width: number; height: number }[] = [];
     const globalEmptyBoxes: { x: number; y: number; width: number; height: number }[] = [];
@@ -864,6 +884,12 @@ export default function ImageBubbles({
       });
     });
 
+    console.log('Setting bubbles:', {
+      newBubbles,
+      bubblesCount: newBubbles.length,
+      bubbles: newBubbles.map(b => ({ id: b.id, content: b.content, position: b.position }))
+    });
+    
     setBubbles(newBubbles);
     layoutKeyRef.current = `${imageUrl}-${containerWidth}x${containerHeight}`;
   }, [isVisible, imageUrl, textRegionMapping, sentences, contentRegions, emptyRegions, containerSize, imageSize]);

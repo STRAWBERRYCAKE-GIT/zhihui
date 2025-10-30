@@ -235,6 +235,7 @@ html, body {
 }
 
 .history-item {
+  position: relative;
   width: 80px;
   padding: 8px;
   margin: 5px 0;
@@ -242,7 +243,6 @@ html, body {
   background-color: rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   color: white;
-  cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -252,6 +252,50 @@ html, body {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+}
+
+.history-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  cursor: pointer;
+}
+
+.delete-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #dc3545;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.delete-button:hover {
+  background-color: rgba(255, 255, 255, 1);
+  color: #dc3545;
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.history-item:hover .delete-button {
+  opacity: 1;
 }
 
 .history-filename {
