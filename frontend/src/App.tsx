@@ -10,6 +10,7 @@ import DimensionDetail from './components/DimensionDetail';
 import ScoreRing from './components/ScoreRing';
 import ErrorBoundary from './components/ErrorBoundary';
 import ImageBubbles from './components/ImageBubbles';
+import { filterEvaluationText } from './utils/textFilter';
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -528,17 +529,15 @@ function App() {
                 <div className="upload-container">
                   {selectedImage ? (
                     <div className="image-with-name">
-                      <ErrorBoundary>
-                        <ImageBubbles
-                          imageUrl={selectedImage}
-                          sentences={[]} // 改为仅关键词驱动：不使用非关键词句子
-                          isVisible={showBubbles}
-                          emptyRegions={evaluation?.empty_regions || evaluation?.emptyRegions || []}
-                          contentRegions={evaluation?.content_regions || evaluation?.contentRegions || []}
-                          textRegionMapping={evaluation?.text_region_mapping || []} // 保持从后端原样传入（含 keyword/region/empty_region）
-                          viewportOffset={viewportOffset}
-                        />
-                      </ErrorBoundary>
+                      <ImageBubbles
+                        imageUrl={selectedImage}
+                        sentences={[]} // 改为仅关键词驱动：不使用非关键词句子
+                        isVisible={showBubbles}
+                        emptyRegions={evaluation?.empty_regions || evaluation?.emptyRegions || []}
+                        contentRegions={evaluation?.content_regions || evaluation?.contentRegions || []}
+                        textRegionMapping={evaluation?.text_region_mapping || []} // 保持从后端原样传入（含 keyword/region/empty_region）
+                        viewportOffset={viewportOffset}
+                      />
                       {evaluation?.filename && (
                         <div className="image-filename">{evaluation.filename}</div>
                       )}

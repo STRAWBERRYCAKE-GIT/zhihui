@@ -134,7 +134,7 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.3;
+  line-height: 1.5;
   min-width: 160px;
   box-shadow: 0 2px 8px rgba(255, 140, 66, 0.25);
   border: none;
@@ -329,21 +329,19 @@
 /* 新的优化气泡样式 - 双层边框设计 */
 .bubble {
   background: #ffffff;
-  color: #666;
-  border: 1.5px solid #ff8c42;
-  border-radius: 12px;
-  padding: 1px;
+  color: #333;
+  border: 1px solid #ff8c42;
+  border-radius: 8px;
+  padding: 2px;
   font-size: 14px;
-  font-weight: normal;
+  font-weight: 500;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  line-height: 1.3;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  box-shadow: 0 2px 8px rgba(255, 140, 66, 0.25);
+  box-shadow: 0 2px 8px rgba(255, 140, 66, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  line-height: 1.5;
   word-wrap: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
@@ -368,7 +366,7 @@
 
 .bubble:hover {
   transform: translateZ(0) scale(1.02);
-  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
   border-color: #e67a3a;
 }
 
@@ -385,18 +383,16 @@
   height: 100%;
   background: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 6px 10px;
-  color: #666;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #333;
   font-size: 14px;
-  font-weight: normal;
+  font-weight: 500;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  line-height: 1.3;
+  line-height: 1.4;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   position: relative;
   z-index: 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }

@@ -51,6 +51,71 @@ const EDGE_SCAN_STEP = 14;
 
 const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(val, max));
 
+// 在气泡内部找到最佳连接点，避免虚线相交
+function findOptimalBubbleConnectionPoint(
+  bubbleRect: { x: number; y: number; width: number; height: number },
+  externalDotX: number,
+  externalDotY: number,
+  allBubbles: Array<{ rect: { x: number; y: number; width: number; height: number }, dotX: number, dotY: number }>,
+  currentBubbleIndex: number
+): { x: number; y: number } {
+  const margin = 8; // 距离边缘的最小距离
+  const candidates: Array<{ x: number; y: number; score: number }> = [];
+  
+  // 在气泡内部生成候选连接点
+  for (let offsetX = margin; offsetX <= bubbleRect.width - margin; offsetX += 10) {
+    for (let offsetY = margin; offsetY <= bubbleRect.height - margin; offsetY += 10) {
+      const candidateX = bubbleRect.x + offsetX;
+      const candidateY = bubbleRect.y + offsetY;
+      
+      // 计算与外部点的距离（越近越好）
+      const distanceScore = 1 / (1 + Math.hypot(candidateX - externalDotX, candidateY - externalDotY) / 100);
+      
+      // 检查是否与其他连线相交
+      let intersectionPenalty = 0;
+      for (let i = 0; i < allBubbles.length; i++) {
+        if (i === currentBubbleIndex) continue;
+        
+        const otherBubble = allBubbles[i];
+        if (linesIntersect(
+          { x: externalDotX, y: externalDotY },
+          { x: candidateX, y: candidateY },
+          { x: otherBubble.dotX, y: otherBubble.dotY },
+          { x: otherBubble.rect.x + otherBubble.rect.width / 2, y: otherBubble.rect.y + otherBubble.rect.height / 2 }
+        )) {
+          intersectionPenalty += 0.5;
+        }
+      }
+      
+      const totalScore = distanceScore - intersectionPenalty;
+      candidates.push({ x: candidateX, y: candidateY, score: totalScore });
+    }
+  }
+  
+  // 选择评分最高的候选点
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.length > 0 ? candidates[0] : { 
+    x: bubbleRect.x + bubbleRect.width / 2, 
+    y: bubbleRect.y + bubbleRect.height / 2 
+  };
+}
+
+// 检查两条线段是否相交
+function linesIntersect(
+  line1Start: { x: number; y: number },
+  line1End: { x: number; y: number },
+  line2Start: { x: number; y: number },
+  line2End: { x: number; y: number }
+): boolean {
+  const det = (line1End.x - line1Start.x) * (line2End.y - line2Start.y) - (line2End.x - line2Start.x) * (line1End.y - line1Start.y);
+  if (det === 0) return false; // 平行线
+  
+  const lambda = ((line2End.y - line2Start.y) * (line2End.x - line1Start.x) + (line2Start.x - line2End.x) * (line2End.y - line1Start.y)) / det;
+  const gamma = ((line1Start.y - line1End.y) * (line2End.x - line1Start.x) + (line1End.x - line1Start.x) * (line2End.y - line1Start.y)) / det;
+  
+  return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+}
+
 // 计算气泡到矩形边缘的最近连接点 - 确保虚线不穿透气泡
 function findNearestEdgePoint(
   bubbleRect: { x: number; y: number; width: number; height: number },
@@ -139,6 +204,104 @@ function findNearestEdgePoint(
   return { x: Math.round(closestPoint.x), y: Math.round(closestPoint.y) };
 }
 
+// 生成分段虚线，隐藏气泡内部的部分
+function generateSegmentedLine(
+  startPoint: { x: number; y: number },
+  endPoint: { x: number; y: number },
+  bubbleRect: { x: number; y: number; width: number; height: number }
+): Array<{ start: { x: number; y: number }, end: { x: number; y: number } }> {
+  const segments: Array<{ start: { x: number; y: number }, end: { x: number; y: number } }> = [];
+  
+  // 检查线段是否与气泡相交
+  const intersections = findLineRectIntersections(startPoint, endPoint, bubbleRect);
+  
+  if (intersections.length === 0) {
+    // 没有相交，返回完整线段
+    return [{ start: startPoint, end: endPoint }];
+  }
+  
+  // 按距离起点的远近排序交点
+  intersections.sort((a, b) => {
+    const distA = Math.hypot(a.x - startPoint.x, a.y - startPoint.y);
+    const distB = Math.hypot(b.x - startPoint.x, b.y - startPoint.y);
+    return distA - distB;
+  });
+  
+  // 生成线段：从起点到第一个交点
+  if (intersections.length > 0) {
+    const firstIntersection = intersections[0];
+    const distToFirst = Math.hypot(firstIntersection.x - startPoint.x, firstIntersection.y - startPoint.y);
+    if (distToFirst > 2) { // 只有距离足够远才添加线段
+      segments.push({ start: startPoint, end: firstIntersection });
+    }
+  }
+  
+  // 生成线段：从最后一个交点到终点
+  if (intersections.length > 1) {
+    const lastIntersection = intersections[intersections.length - 1];
+    const distToLast = Math.hypot(endPoint.x - lastIntersection.x, endPoint.y - lastIntersection.y);
+    if (distToLast > 2) { // 只有距离足够远才添加线段
+      segments.push({ start: lastIntersection, end: endPoint });
+    }
+  }
+  
+  return segments;
+}
+
+// 找到线段与矩形的所有交点
+function findLineRectIntersections(
+  lineStart: { x: number; y: number },
+  lineEnd: { x: number; y: number },
+  rect: { x: number; y: number; width: number; height: number }
+): Array<{ x: number; y: number }> {
+  const intersections: Array<{ x: number; y: number }> = [];
+  
+  // 矩形的四条边
+  const edges = [
+    { start: { x: rect.x, y: rect.y }, end: { x: rect.x + rect.width, y: rect.y } }, // 上边
+    { start: { x: rect.x + rect.width, y: rect.y }, end: { x: rect.x + rect.width, y: rect.y + rect.height } }, // 右边
+    { start: { x: rect.x + rect.width, y: rect.y + rect.height }, end: { x: rect.x, y: rect.y + rect.height } }, // 下边
+    { start: { x: rect.x, y: rect.y + rect.height }, end: { x: rect.x, y: rect.y } } // 左边
+  ];
+  
+  for (const edge of edges) {
+    const intersection = findLineIntersection(lineStart, lineEnd, edge.start, edge.end);
+    if (intersection) {
+      intersections.push(intersection);
+    }
+  }
+  
+  return intersections;
+}
+
+// 找到两条线段的交点
+function findLineIntersection(
+  line1Start: { x: number; y: number },
+  line1End: { x: number; y: number },
+  line2Start: { x: number; y: number },
+  line2End: { x: number; y: number }
+): { x: number; y: number } | null {
+  const x1 = line1Start.x, y1 = line1Start.y;
+  const x2 = line1End.x, y2 = line1End.y;
+  const x3 = line2Start.x, y3 = line2Start.y;
+  const x4 = line2End.x, y4 = line2End.y;
+  
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denom) < 1e-10) return null; // 平行线
+  
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+  
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+    return {
+      x: x1 + t * (x2 - x1),
+      y: y1 + t * (y2 - y1)
+    };
+  }
+  
+  return null;
+}
+
 const clampRectToContainer = (
   rect: { x: number; y: number; width: number; height: number },
   containerWidth: number,
@@ -202,8 +365,8 @@ const isNormalizedRect = (r: Region | undefined) => {
 // 坐标模式检测：仅保留 normalized / pixel，避免误判百分比
 function detectCoordMode(
   r: Region | undefined,
-  _imageWidth: number,
-  _imageHeight: number
+  imageWidth: number,
+  imageHeight: number
 ): 'normalized' | 'pixel' {
   if (!r) return 'pixel';
   if (isNormalizedRect(r)) return 'normalized';
@@ -291,18 +454,88 @@ function centerToContainerPixels(
 }
 
 // 自适应主体避让边距：按显示尺寸动态计算
+function subtractContentFromEmptyRect(
+  emptyRect: { x: number; y: number; width: number; height: number },
+  contentRects: Array<{ x: number; y: number; width: number; height: number }>,
+  avoidMargin: number
+) {
+  const result: Array<{ x: number; y: number; width: number; height: number }> = [emptyRect];
+
+  const intersect = (a: any, b: any) => {
+    const ix = Math.max(a.x, b.x);
+    const iy = Math.max(a.y, b.y);
+    const ax = Math.min(a.x + a.width, b.x + b.width);
+    const ay = Math.min(a.y + a.height, b.y + b.height);
+    if (ax <= ix || ay <= iy) return null;
+    return { x: ix, y: iy, width: ax - ix, height: ay - iy };
+  };
+
+  const subtractOnce = (src: any, sub: any) => {
+    const inter = intersect(src, sub);
+    if (!inter) return [src];
+    const out: any[] = [];
+    // 上
+    if (inter.y > src.y) {
+      out.push({ x: src.x, y: src.y, width: src.width, height: inter.y - src.y });
+    }
+    // 下
+    if (inter.y + inter.height < src.y + src.height) {
+      out.push({
+        x: src.x,
+        y: inter.y + inter.height,
+        width: src.width,
+        height: src.y + src.height - (inter.y + inter.height)
+      });
+    }
+    // 左
+    if (inter.x > src.x) {
+      out.push({
+        x: src.x,
+        y: inter.y,
+        width: inter.x - src.x,
+        height: inter.height
+      });
+    }
+    // 右
+    if (inter.x + inter.width < src.x + src.width) {
+      out.push({
+        x: inter.x + inter.width,
+        y: inter.y,
+        width: src.x + src.width - (inter.x + inter.width),
+        height: inter.height
+      });
+    }
+    return out;
+  };
+
+  let working = result;
+  for (const c of contentRects) {
+    const inflated = inflateRect(c, avoidMargin);
+    const next: any[] = [];
+    for (const r of working) {
+      const parts = subtractOnce(r, inflated);
+      next.push(...parts);
+    }
+    working = next.filter((p) => p.width >= 8 && p.height >= 8);
+  }
+
+  return working;
+}
 
 function computeBubbleSize(content: string, currentCount: number) {
-  const baseW = 140;  // 减小基础宽度
-  const baseH = 60;   // 减小基础高度
+  const baseW = 180;
+  const baseH = 84;
   const len = content.length;
-  const w = clamp(baseW + Math.floor(len * 1.5), 120, 220);  // 减小尺寸范围
-  const lines = Math.ceil(len / 24);  // 每行字符数稍微减少
-  const h = clamp(baseH + lines * 12, 50, 100);  // 减小高度范围和行高
-  const scale = currentCount > 6 ? 0.8 : currentCount > 3 ? 0.9 : 1.0;  // 进一步缩小
+  const w = clamp(baseW + Math.floor(len * 2), 160, 280);
+  const lines = Math.ceil(len / 28);
+  const h = clamp(baseH + lines * 16, 72, 140);
+  const scale = currentCount > 6 ? 0.85 : currentCount > 3 ? 0.92 : 1.0;
   return { bubbleWidth: Math.round(w * scale), bubbleHeight: Math.round(h * scale) };
 }
 
+function pointInRect(p: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
+  return p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
+}
 
 const segmentIntersectsRect = (
   p1: { x: number; y: number },
@@ -373,9 +606,147 @@ function nearestPointInRectToPoint(
   return { x, y };
 }
 
+function allowedCenterBounds(
+  subRect: { x: number; y: number; width: number; height: number },
+  bubbleWidth: number,
+  bubbleHeight: number
+) {
+  const minCx = subRect.x + bubbleWidth / 2;
+  const minCy = subRect.y + bubbleHeight / 2;
+  const maxCx = subRect.x + subRect.width - bubbleWidth / 2;
+  const maxCy = subRect.y + subRect.height - bubbleHeight / 2;
+  return { minCx, maxCx, minCy, maxCy };
+}
 
+function farthestCenterFromDotInBounds(
+  dotX: number,
+  dotY: number,
+  bounds: { minCx: number; maxCx: number; minCy: number; maxCy: number }
+) {
+  const candidates = [
+    { x: bounds.minCx, y: bounds.minCy },
+    { x: bounds.minCx, y: bounds.maxCy },
+    { x: bounds.maxCx, y: bounds.minCy },
+    { x: bounds.maxCx, y: bounds.maxCy }
+  ];
+  let best = candidates[0];
+  let bestDist = -Infinity;
+  for (const c of candidates) {
+    const d = Math.hypot(c.x - dotX, c.y - dotY);
+    if (d > bestDist) { bestDist = d; best = c; }
+  }
+  return best;
+}
 
+function placeBubbleInLargestNearestEmpty(
+  dotX: number,
+  dotY: number,
+  bubbleWidth: number,
+  bubbleHeight: number,
+  emptyRects: { x: number; y: number; width: number; height: number }[],
+  contentRects: { x: number; y: number; width: number; height: number }[],
+  usedBubbleRects: { x: number; y: number; width: number; height: number }[],
+  containerWidth: number,
+  containerHeight: number,
+  ctx: CanvasRenderingContext2D | null,
+  imageWidth: number,
+  imageHeight: number
+) {
+  const avoidMargin = Math.round(Math.min(containerWidth, containerHeight) * 0.018);
+  const candidates: { x: number; y: number; width: number; height: number }[] = [];
+  for (const r of emptyRects) {
+    const subRects = subtractContentFromEmptyRect(r, contentRects, avoidMargin);
+    for (const s of subRects) {
+      if (s.width < bubbleWidth || s.height < bubbleHeight) continue;
+      const bounds = allowedCenterBounds(s, bubbleWidth, bubbleHeight);
+      const center = farthestCenterFromDotInBounds(dotX, dotY, bounds);
+      const rect = { x: Math.round(center.x - bubbleWidth / 2), y: Math.round(center.y - bubbleHeight / 2), width: bubbleWidth, height: bubbleHeight };
+      candidates.push(rect);
+    }
+  }
 
+  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  // 先尝试不与已放置气泡重叠的候选
+  for (const rect of candidates) {
+    let overlapBubble = false;
+    for (const u of usedBubbleRects) {
+      if (rectsOverlap(rect, u)) { overlapBubble = true; break; }
+    }
+    if (overlapBubble) continue;
+
+    if (!overlapsWithContent(rect, contentRects, CONTENT_AVOID_MARGIN)) {
+      return rect;
+    }
+  }
+
+  // 无法避开已放气泡，则选一个面积最大且离 anchor 更远的
+  let best: { x: number; y: number; width: number; height: number } | null = null;
+  let bestDist = -Infinity;
+  for (const rect of candidates) {
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const dist = Math.hypot(cx - dotX, cy - dotY);
+    if (dist > bestDist) {
+      best = rect;
+      bestDist = dist;
+    }
+  }
+  return best || null;
+}
+
+function radialSearchInEmptyRects(
+  dotX: number,
+  dotY: number,
+  bubbleWidth: number,
+  bubbleHeight: number,
+  emptyRects: { x: number; y: number; width: number; height: number }[],
+  contentRects: { x: number; y: number; width: number; height: number }[],
+  usedBubbleRects: { x: number; y: number; width: number; height: number }[],
+  containerWidth: number,
+  containerHeight: number,
+  ctx: CanvasRenderingContext2D | null,
+  imageWidth: number,
+  imageHeight: number
+) {
+  const avoidMargin = Math.round(Math.min(containerWidth, containerHeight) * 0.016);
+  const steps = 8;
+  const radiusInc = Math.round(Math.min(containerWidth, containerHeight) * 0.04);
+
+  for (let r = radiusInc; r <= radiusInc * 3; r += radiusInc) {
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI;
+      const cx = dotX + Math.round(Math.cos(angle) * r);
+      const cy = dotY + Math.round(Math.sin(angle) * r);
+      const rect = clampRectToContainer(
+        { x: Math.round(cx - bubbleWidth / 2), y: Math.round(cy - bubbleHeight / 2), width: bubbleWidth, height: bubbleHeight },
+        containerWidth, containerHeight
+      );
+
+      // 避免与已放置气泡重叠
+      let overlapBubble = false;
+      for (const u of usedBubbleRects) {
+        if (rectsOverlap(rect, u)) { overlapBubble = true; break; }
+      }
+      if (overlapBubble) continue;
+
+      // 避免连接线穿过主体内容
+      const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      let crosses = false;
+      for (const c of contentRects) {
+        if (segmentIntersectsRect({ x: dotX, y: dotY }, center, c)) { crosses = true; break; }
+      }
+      if (crosses) continue;
+
+      // 避免靠近主体：用空白度评分兜底
+      const emptyScore = computeEmptinessScoreForRect(rect, containerWidth, containerHeight, imageWidth, imageHeight, ctx);
+      if (emptyScore < MIN_EMPTY_SCORE) continue;
+
+      return rect;
+    }
+  }
+
+  return null;
+}
 
 function adjustBubbleToAvoidLineCrossing(
   initialRect: { x: number; y: number; width: number; height: number },
@@ -884,248 +1255,132 @@ export default function ImageBubbles({
 
   // 主布局计算：使用 DINO 空白与主体区域
   useEffect(() => {
-    try {
-      console.log('ImageBubbles useEffect triggered:', {
-        isVisible,
-        textRegionMapping,
-        containerSize,
-        imageSize
-      });
-      
-      if (!isVisible) { 
-        console.log('Not visible, clearing bubbles');
-        setBubbles([]); 
-        return; 
-      }
-      const container = containerRef.current;
-      const img = imageRef.current;
-      const ctx = ctxRef.current;
-      if (!container || !img) {
-        console.log('Container or image not ready');
-        return;
-      }
-
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
-      const imageWidth = img.naturalWidth;
-      const imageHeight = img.naturalHeight;
-
-      // 验证图像尺寸
-      if (!imageWidth || !imageHeight || imageWidth <= 0 || imageHeight <= 0) {
-        console.error('Invalid image dimensions:', { imageWidth, imageHeight });
-        setBubbles([]);
-        return;
-      }
-
-      // 验证容器尺寸
-      if (!containerWidth || !containerHeight || containerWidth <= 0 || containerHeight <= 0) {
-        console.error('Invalid container dimensions:', { containerWidth, containerHeight });
-        setBubbles([]);
-        return;
-      }
-
-      // 安全地处理textRegionMapping数据
-      const items = [];
-      if (textRegionMapping && Array.isArray(textRegionMapping) && textRegionMapping.length > 0) {
-        for (const m of textRegionMapping) {
-          try {
-            if (m && typeof m === 'object') {
-              items.push({ 
-                text: m.text || '', 
-                keyword: m.keyword || '', 
-                region: m.region || null, 
-                empty_region: m.empty_region || null 
-              });
-            }
-          } catch (err) {
-            console.warn('Error processing textRegionMapping item:', err, m);
-          }
-        }
-      }
-
-      console.log('Processing items for bubbles:', {
-        textRegionMapping,
-        items,
-        itemsLength: items.length
-      });
-
-      const contentBoxes: { x: number; y: number; width: number; height: number }[] = [];
-      const globalEmptyBoxes: { x: number; y: number; width: number; height: number }[] = [];
-
-      // 安全地处理items
-      if (items.length > 0) {
-        for (const m of items) {
-          try {
-            if (m.region && typeof m.region === 'object') {
-              const rect = regionToContainerRect(m.region, containerWidth, containerHeight, imageWidth, imageHeight);
-              if (rect && typeof rect === 'object' && !isNaN(rect.x) && !isNaN(rect.y)) {
-                contentBoxes.push(rect);
-              }
-            }
-            if (m.empty_region && typeof m.empty_region === 'object') {
-              const rect = regionToContainerRect(m.empty_region, containerWidth, containerHeight, imageWidth, imageHeight);
-              if (rect && typeof rect === 'object' && !isNaN(rect.x) && !isNaN(rect.y) && rect.width > 8 && rect.height > 8) {
-                globalEmptyBoxes.push(rect);
-              }
-            }
-          } catch (err) {
-            console.warn('Error processing item regions:', err, m);
-          }
-        }
-      }
-
-      // 安全地处理contentRegions
-      if (contentRegions && Array.isArray(contentRegions)) {
-        for (const r of contentRegions) {
-          try {
-            if (r && typeof r === 'object') {
-              const rect = regionToContainerRect(r, containerWidth, containerHeight, imageWidth, imageHeight);
-              if (rect && typeof rect === 'object' && !isNaN(rect.x) && !isNaN(rect.y)) {
-                contentBoxes.push(rect);
-              }
-            }
-          } catch (err) {
-            console.warn('Error processing contentRegions:', err, r);
-          }
-        }
-      }
-
-      // 安全地处理emptyRegions
-      if (emptyRegions && Array.isArray(emptyRegions)) {
-        for (const r of emptyRegions) {
-          try {
-            if (r && typeof r === 'object') {
-              const rect = regionToContainerRect(r, containerWidth, containerHeight, imageWidth, imageHeight);
-              if (rect && typeof rect === 'object' && !isNaN(rect.x) && !isNaN(rect.y) && rect.width > 8 && rect.height > 8) {
-                globalEmptyBoxes.push(rect);
-              }
-            }
-          } catch (err) {
-            console.warn('Error processing emptyRegions:', err, r);
-          }
-        }
-      }
-
-      const placedRects: { x: number; y: number; width: number; height: number }[] = [];
-      const newBubbles: Bubble[] = [];
-
-      // 安全地处理每个气泡项目
-      items.forEach((item, idx) => {
-        try {
-          const contentText = (item.text || item.keyword || '').trim();
-          if (!contentText) return;
-          if (!item.region) return;
-
-          const centerResult = centerToContainerPixels(item.region, containerWidth, containerHeight, imageWidth, imageHeight);
-          if (!centerResult || isNaN(centerResult.x) || isNaN(centerResult.y)) {
-            console.warn('Invalid center calculation for item:', item);
-            return;
-          }
-          const { x: dotX, y: dotY } = centerResult;
-
-          const preferredEmptyRects: { x: number; y: number; width: number; height: number }[] = [];
-          if (item.empty_region) {
-            try {
-              const er = regionToContainerRect(item.empty_region, containerWidth, containerHeight, imageWidth, imageHeight);
-              if (er && !isNaN(er.x) && !isNaN(er.y) && er.width > 8 && er.height > 8) {
-                preferredEmptyRects.push(er);
-              }
-            } catch (err) {
-              console.warn('Error processing empty_region:', err, item.empty_region);
-            }
-          }
-
-          const placed = calculateOptimalBubblePosition(
-            dotX, dotY, containerWidth, containerHeight, placedRects,
-            contentText, contentBoxes, preferredEmptyRects, globalEmptyBoxes, ctx, imageWidth, imageHeight
-          );
-
-          // 验证气泡位置计算结果
-          if (!placed || isNaN(placed.bubbleX) || isNaN(placed.bubbleY) || isNaN(placed.width) || isNaN(placed.height)) {
-            console.warn('Invalid bubble position calculated for item:', item, placed);
-            return;
-          }
-
-          const center = { x: placed.bubbleX + placed.width / 2, y: placed.bubbleY + placed.height / 2 };
-          let crosses = false;
-          try {
-            for (const c of contentBoxes) {
-              if (segmentIntersectsRect({ x: dotX, y: dotY }, center, c)) { crosses = true; break; }
-            }
-          } catch (err) {
-            console.warn('Error checking line crossing:', err);
-            crosses = false;
-          }
-
-          let finalRect = { x: placed.bubbleX, y: placed.bubbleY, width: placed.width, height: placed.height };
-          if (crosses) {
-            try {
-              finalRect = adjustBubbleToAvoidLineCrossing(
-                finalRect, dotX, dotY, contentBoxes, placedRects,
-                containerWidth, containerHeight, ctx, imageWidth, imageHeight
-              );
-            } catch (err) {
-              console.warn('Error adjusting bubble position:', err);
-              // 使用原始位置作为后备
-            }
-          }
-
-          // 写入"膨胀后的占位"，为后续气泡留安全边距，避免重叠
-          try {
-            const inflatedRect = inflateRect(finalRect, 6);
-            if (inflatedRect && !isNaN(inflatedRect.x) && !isNaN(inflatedRect.y)) {
-              placedRects.push(inflatedRect);
-            }
-          } catch (err) {
-            console.warn('Error inflating rect:', err);
-          }
-
-          // 使用百分比存储，渲染时转换像素
-          const bubbleXPercent = ((finalRect.x + finalRect.width / 2) / containerWidth) * 100;
-          const bubbleYPercent = ((finalRect.y + finalRect.height / 2) / containerHeight) * 100;
-          const dotXPercent = (dotX / containerWidth) * 100;
-          const dotYPercent = (dotY / containerHeight) * 100;
-
-          // 验证百分比计算结果
-          if (isNaN(bubbleXPercent) || isNaN(bubbleYPercent) || isNaN(dotXPercent) || isNaN(dotYPercent)) {
-            console.warn('Invalid percentage calculation for item:', item, {
-              bubbleXPercent, bubbleYPercent, dotXPercent, dotYPercent
-            });
-            return;
-          }
-
-          newBubbles.push({
-            id: `bubble-${idx}`,
-            content: contentText,
-            position: {
-              x: finalRect.x,
-              y: finalRect.y,
-              bubbleX: bubbleXPercent,
-              bubbleY: bubbleYPercent,
-              dotX: dotXPercent,
-              dotY: dotYPercent
-            },
-            width: finalRect.width,
-            height: finalRect.height
-          });
-        } catch (err) {
-          console.error('Error processing bubble item:', err, item);
-        }
-      });
-
-      console.log('Setting bubbles:', {
-        newBubbles,
-        bubblesCount: newBubbles.length,
-        bubbles: newBubbles.map(b => ({ id: b.id, content: b.content, position: b.position }))
-      });
-      
-      setBubbles(newBubbles);
-      layoutKeyRef.current = `${imageUrl}-${containerWidth}x${containerHeight}`;
-    } catch (error) {
-      console.error('Critical error in ImageBubbles useEffect:', error);
-      // 设置空气泡数组，防止白屏
-      setBubbles([]);
+    console.log('ImageBubbles useEffect triggered:', {
+      isVisible,
+      textRegionMapping,
+      containerSize,
+      imageSize
+    });
+    
+    if (!isVisible) { 
+      console.log('Not visible, clearing bubbles');
+      setBubbles([]); 
+      return; 
     }
+    const container = containerRef.current;
+    const img = imageRef.current;
+    const ctx = ctxRef.current;
+    if (!container || !img) {
+      console.log('Container or image not ready');
+      return;
+    }
+
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const imageWidth = img.naturalWidth;
+    const imageHeight = img.naturalHeight;
+
+    const items = (textRegionMapping && textRegionMapping.length > 0)
+      ? textRegionMapping.map((m) => ({ text: m.text, keyword: m.keyword, region: m.region, empty_region: m.empty_region }))
+      : [];
+
+    console.log('Processing items for bubbles:', {
+      textRegionMapping,
+      items,
+      itemsLength: items.length
+    });
+
+    const contentBoxes: { x: number; y: number; width: number; height: number }[] = [];
+    const globalEmptyBoxes: { x: number; y: number; width: number; height: number }[] = [];
+
+    if (items.length > 0) {
+      for (const m of items) {
+        if (m.region) {
+          const rect = regionToContainerRect(m.region, containerWidth, containerHeight, imageWidth, imageHeight);
+          contentBoxes.push(rect);
+        }
+        if (m.empty_region) {
+          const rect = regionToContainerRect(m.empty_region, containerWidth, containerHeight, imageWidth, imageHeight);
+          if (rect.width > 8 && rect.height > 8) globalEmptyBoxes.push(rect);
+        }
+      }
+    }
+    for (const r of contentRegions || []) {
+      const rect = regionToContainerRect(r, containerWidth, containerHeight, imageWidth, imageHeight);
+      contentBoxes.push(rect);
+    }
+    for (const r of emptyRegions || []) {
+      const rect = regionToContainerRect(r, containerWidth, containerHeight, imageWidth, imageHeight);
+      if (rect.width > 8 && rect.height > 8) globalEmptyBoxes.push(rect);
+    }
+
+    const placedRects: { x: number; y: number; width: number; height: number }[] = [];
+    const newBubbles: Bubble[] = [];
+
+    items.forEach((item, idx) => {
+      const contentText = (item.text || item.keyword || '').trim();
+      if (!contentText) return;
+      if (!item.region) return;
+
+      const { x: dotX, y: dotY } = centerToContainerPixels(item.region, containerWidth, containerHeight, imageWidth, imageHeight);
+
+      const preferredEmptyRects: { x: number; y: number; width: number; height: number }[] = [];
+      if (item.empty_region) {
+        const er = regionToContainerRect(item.empty_region, containerWidth, containerHeight, imageWidth, imageHeight);
+        if (er.width > 8 && er.height > 8) preferredEmptyRects.push(er);
+      }
+
+      const placed = calculateOptimalBubblePosition(
+        dotX, dotY, containerWidth, containerHeight, placedRects,
+        contentText, contentBoxes, preferredEmptyRects, globalEmptyBoxes, ctx, imageWidth, imageHeight
+      );
+
+      const center = { x: placed.bubbleX + placed.width / 2, y: placed.bubbleY + placed.height / 2 };
+      let crosses = false;
+      for (const c of contentBoxes) {
+        if (segmentIntersectsRect({ x: dotX, y: dotY }, center, c)) { crosses = true; break; }
+      }
+      let finalRect = { x: placed.bubbleX, y: placed.bubbleY, width: placed.width, height: placed.height };
+      if (crosses) {
+        finalRect = adjustBubbleToAvoidLineCrossing(
+          finalRect, dotX, dotY, contentBoxes, placedRects,
+          containerWidth, containerHeight, ctx, imageWidth, imageHeight
+        );
+      }
+
+      // 写入“膨胀后的占位”，为后续气泡留安全边距，避免重叠
+      placedRects.push(inflateRect(finalRect, 6));
+
+      // 使用百分比存储，渲染时转换像素
+      const bubbleXPercent = ((finalRect.x + finalRect.width / 2) / containerWidth) * 100;
+      const bubbleYPercent = ((finalRect.y + finalRect.height / 2) / containerHeight) * 100;
+      const dotXPercent = (dotX / containerWidth) * 100;
+      const dotYPercent = (dotY / containerHeight) * 100;
+
+      newBubbles.push({
+        id: `bubble-${idx}`,
+        content: contentText,
+        position: {
+          x: finalRect.x,
+          y: finalRect.y,
+          bubbleX: bubbleXPercent,
+          bubbleY: bubbleYPercent,
+          dotX: dotXPercent,
+          dotY: dotYPercent
+        },
+        width: finalRect.width,
+        height: finalRect.height
+      });
+    });
+
+    console.log('Setting bubbles:', {
+      newBubbles,
+      bubblesCount: newBubbles.length,
+      bubbles: newBubbles.map(b => ({ id: b.id, content: b.content, position: b.position }))
+    });
+    
+    setBubbles(newBubbles);
+    layoutKeyRef.current = `${imageUrl}-${containerWidth}x${containerHeight}`;
   }, [isVisible, imageUrl, textRegionMapping, sentences, contentRegions, emptyRegions, containerSize, imageSize]);
 
   // 容器尺寸变化：重绘画布为显示尺寸 + 偏移
@@ -1197,110 +1452,189 @@ export default function ImageBubbles({
           </filter>
         </defs>
         
-        {bubbles.map((b) => {
-          try {
+        {(() => {
+          // 预处理所有气泡信息，用于优化连接点选择
+          console.log('🔍 虚线连接数量检查:', {
+            原始气泡数量: bubbles.length,
+            容器尺寸: containerSize
+          });
+          
+          const bubbleInfos = bubbles.map((b, index) => {
+            const { dotX, dotY, bubbleX, bubbleY } = b.position;
+            const x1 = ((dotX || 0) / 100) * containerSize.width;
+            const y1 = ((dotY || 0) / 100) * containerSize.height;
+            const x2 = ((bubbleX || 0) / 100) * containerSize.width;
+            const y2 = ((bubbleY || 0) / 100) * containerSize.height;
+            
+            const bubbleWidth = b.width || 160;
+            const bubbleHeight = b.height || 80;
+            const bubbleRect = {
+              x: x2 - bubbleWidth / 2,
+              y: y2 - bubbleHeight / 2,
+              width: bubbleWidth,
+              height: bubbleHeight
+            };
+            
+            return {
+              bubble: b,
+              index,
+              externalDot: { x: snap(x1), y: snap(y1) },
+              bubbleCenter: { x: x2, y: y2 },
+              rect: bubbleRect
+            };
+          }).filter(info => {
+            const { dotX, dotY, bubbleX, bubbleY } = info.bubble.position;
             const isFiniteNumber = (v: number | undefined) => typeof v === 'number' && Number.isFinite(v);
-            const { dotX, dotY, bubbleX, bubbleY } = b.position || {};
-            const hasCoords = isFiniteNumber(dotX) && isFiniteNumber(dotY) && isFiniteNumber(bubbleX) && isFiniteNumber(bubbleY);
-            if (!hasCoords) {
-              console.warn('Invalid bubble coordinates:', b);
-              return null;
+            const isValid = isFiniteNumber(dotX) && isFiniteNumber(dotY) && isFiniteNumber(bubbleX) && isFiniteNumber(bubbleY);
+            
+            if (!isValid) {
+              console.warn('❌ 发现无效气泡坐标:', {
+                气泡ID: info.bubble.id,
+                位置: { dotX, dotY, bubbleX, bubbleY }
+              });
+            }
+            
+            return isValid;
+          });
+          
+          console.log('📊 坐标验证结果:', {
+            有效气泡数量: bubbleInfos.length,
+            被过滤的气泡数量: bubbles.length - bubbleInfos.length,
+            有效气泡详情: bubbleInfos.map(info => ({
+              ID: info.bubble.id,
+              外部点: info.externalDot,
+              气泡中心: info.bubbleCenter
+            }))
+          });
+
+          const renderedConnections = bubbleInfos.map((info) => {
+            const { bubble: b, index, externalDot, bubbleCenter, rect } = info;
+            
+            // 为每个气泡找到最佳的内部连接点
+            const bubbleConnectionPoint = findOptimalBubbleConnectionPoint(
+              rect,
+              externalDot.x,
+              externalDot.y,
+              bubbleInfos.map(bi => ({ rect: bi.rect, dotX: bi.externalDot.x, dotY: bi.externalDot.y })),
+              index
+            );
+            
+            // 生成分段虚线，隐藏气泡内部的部分
+            const lineSegments = generateSegmentedLine(
+              externalDot,
+              bubbleConnectionPoint,
+              rect
+            );
+            
+            // 统计每个气泡的连接信息
+            console.log(`🔗 气泡 ${b.id} 连接统计:`, {
+              外部点坐标: externalDot,
+              内部连接点: bubbleConnectionPoint,
+              虚线段数: lineSegments.length,
+              线段详情: lineSegments.map((seg, i) => ({
+                段号: i + 1,
+                起点: seg.start,
+                终点: seg.end,
+                长度: Math.hypot(seg.end.x - seg.start.x, seg.end.y - seg.start.y).toFixed(2) + 'px'
+              }))
+            });
+            
+            // 调试信息（开发时可用）
+            if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+              console.log(`气泡 ${b.id} 连线调试:`, {
+                外部点: externalDot,
+                气泡中心: bubbleCenter,
+                气泡矩形: rect,
+                内部连接点: bubbleConnectionPoint,
+                线段数量: lineSegments.length
+              });
             }
 
-          const x1 = ((dotX || 0) / 100) * containerSize.width;
-          const y1 = ((dotY || 0) / 100) * containerSize.height;
-          const x2 = ((bubbleX || 0) / 100) * containerSize.width;
-          const y2 = ((bubbleY || 0) / 100) * containerSize.height;
-
-          // 像素栅格对齐，减少抗锯齿模糊
-          const sx1 = snap(x1), sy1 = snap(y1);
-
-          // 计算气泡矩形（用于精确连线）- 与HTML元素位置保持一致
-          const bubbleWidth = b.width || 160;
-          const bubbleHeight = b.height || 80;
-          const bubbleRect = {
-            x: x2 - bubbleWidth / 2,
-            y: y2 - bubbleHeight / 2,
-            width: bubbleWidth,
-            height: bubbleHeight
-          };
-
-          // 计算虚线连接到气泡边缘的精确点
-          const edgePoint = findNearestEdgePoint(bubbleRect, sx1, sy1);
-          const sx2Edge = snap(edgePoint.x);
-          const sy2Edge = snap(edgePoint.y);
+            return (
+              <g key={`annotation-${b.id}`}>
+                {/* 分段虚线 - 隐藏气泡内部部分 */}
+                {lineSegments.map((segment, segIndex) => (
+                  <line
+                    key={`line-${b.id}-${segIndex}`}
+                    x1={snap(segment.start.x)}
+                    y1={snap(segment.start.y)}
+                    x2={snap(segment.end.x)}
+                    y2={snap(segment.end.y)}
+                    stroke="#ff8c42"
+                    strokeWidth={scaledStroke}
+                    strokeDasharray={`${dashA} ${dashB}`}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="url(#lineShadow)"
+                    opacity="0.9"
+                  />
+                ))}
+                
+                {/* 指向点 - 带渐变和阴影 */}
+                <circle 
+                  cx={externalDot.x} 
+                  cy={externalDot.y} 
+                  r={scaledRadius} 
+                  fill="url(#dotGradient)"
+                  filter="url(#dotShadow)"
+                  stroke="#ffffff"
+                  strokeWidth="0.5"
+                />
+                
+                {/* 内部高亮点 */}
+                <circle 
+                  cx={externalDot.x} 
+                  cy={externalDot.y} 
+                  r={scaledRadius * 0.4} 
+                  fill="#ffb366"
+                  opacity="0.9"
+                />
+                
+                {/* 气泡内部连接点（可选，用于调试） */}
+                {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (
+                  <circle 
+                    cx={snap(bubbleConnectionPoint.x)} 
+                    cy={snap(bubbleConnectionPoint.y)} 
+                    r={2} 
+                    fill="#ff0000"
+                    opacity="0.7"
+                  />
+                )}
+              </g>
+            );
+          });
           
-          // 调试信息（开发时可用）
-          if (true) { // 开发环境调试
-            console.log(`气泡 ${b.id} 连线调试:`, {
-              点位置: { x: sx1, y: sy1 },
-              气泡中心: { x: x2, y: y2 },
-              气泡矩形: bubbleRect,
-              边缘连接点: { x: sx2Edge, y: sy2Edge }
-            });
-          }
-
-          return (
-            <g key={`annotation-${b.id}`}>
-              {/* 连接虚线 - 精确连接到气泡边缘 */}
-              <line
-                x1={sx1}
-                y1={sy1}
-                x2={sx2Edge}
-                y2={sy2Edge}
-                stroke="#ff8c42"
-                strokeWidth={scaledStroke}
-                strokeDasharray={`${dashA} ${dashB}`}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#lineShadow)"
-                opacity="0.9"
-              />
-              
-              {/* 指向点 - 带渐变和阴影 */}
-              <circle 
-                cx={sx1} 
-                cy={sy1} 
-                r={scaledRadius} 
-                fill="url(#dotGradient)"
-                filter="url(#dotShadow)"
-                stroke="#ffffff"
-                strokeWidth="0.5"
-              />
-              
-              {/* 内部高亮点 */}
-              <circle 
-                cx={sx1} 
-                cy={sy1} 
-                r={scaledRadius * 0.4} 
-                fill="#ffb366"
-                opacity="0.9"
-              />
-            </g>
-          );
-          } catch (err) {
-            console.error('Error rendering SVG bubble:', err, b);
-            return null;
-          }
-        })}
+          // 最终统计汇总
+          console.log('📈 最终连接统计汇总:', {
+            原始气泡总数: bubbles.length,
+            有效气泡数量: bubbleInfos.length,
+            渲染的连接数: renderedConnections.length,
+            连接完整性: renderedConnections.length === bubbleInfos.length ? '✅ 完整' : '❌ 不完整',
+            数量匹配检查: {
+              '原始气泡 → 有效气泡': bubbleInfos.length === bubbles.length ? '✅ 全部有效' : `⚠️ 有${bubbles.length - bubbleInfos.length}个无效气泡被过滤`,
+              '有效气泡 → 渲染连接': renderedConnections.length === bubbleInfos.length ? '✅ 一一对应' : `❌ 不匹配 (${renderedConnections.length}/${bubbleInfos.length})`,
+              '每个气泡都有虚线': renderedConnections.length > 0 ? '✅ 是' : '❌ 否'
+            },
+            详细信息: {
+              被过滤的原因: bubbles.length !== bubbleInfos.length ? '存在无效坐标的气泡' : '无',
+              预期虚线数量: bubbleInfos.length,
+              实际虚线数量: renderedConnections.length
+            }
+          });
+          
+          return renderedConnections;
+        })()}
       </svg>
 
       {bubbles.map((b) => {
-        try {
-          const bubbleWidth = b.width || 160;
-          const bubbleHeight = b.height || 80;
-          const centerX = ((b.position?.bubbleX || 0) / 100) * containerSize.width;
-          const centerY = ((b.position?.bubbleY || 0) / 100) * containerSize.height;
-          
-          if (isNaN(centerX) || isNaN(centerY)) {
-            console.warn('Invalid bubble center coordinates:', b);
-            return null;
-          }
-          
-          const left = centerX - bubbleWidth / 2;
-          const top = centerY - bubbleHeight / 2;
-          const leftPx = Math.round(left);
-          const topPx = Math.round(top);
+        const bubbleWidth = b.width || 160;
+        const bubbleHeight = b.height || 80;
+        const centerX = ((b.position.bubbleX || 0) / 100) * containerSize.width;
+        const centerY = ((b.position.bubbleY || 0) / 100) * containerSize.height;
+        const left = centerX - bubbleWidth / 2;
+        const top = centerY - bubbleHeight / 2;
+        const leftPx = Math.round(left);
+        const topPx = Math.round(top);
         return (
           <div
             key={b.id}
@@ -1318,13 +1652,9 @@ export default function ImageBubbles({
               willChange: 'transform'
             }}
           >
-            <span className="bubble-text" data-text={b.content || ''}>{b.content || ''}</span>
+            <span className="bubble-text" data-text={b.content}>{b.content}</span>
           </div>
         );
-        } catch (err) {
-          console.error('Error rendering HTML bubble:', err, b);
-          return null;
-        }
       })}
     </div>
   );
