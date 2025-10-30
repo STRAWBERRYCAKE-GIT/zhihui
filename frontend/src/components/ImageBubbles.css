@@ -84,35 +84,60 @@
 }
 
 .connector-line {
-  stroke: #FF7A45;
-  stroke-width: 2;
-  stroke-dasharray: 10 6;
-  opacity: 0.85;
+  stroke: #ff8c42;
+  stroke-width: 1.8;
+  stroke-dasharray: 6 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.15));
 }
 
 .connector-dot {
-  fill: #FF7A45;
-  stroke: #FFFFFF;
-  stroke-width: 3;
-  filter: drop-shadow(0 2px 4px rgba(255, 122, 69, 0.4));
+  fill: #ff8c42;
+  stroke: #ffffff;
+  stroke-width: 1;
+  filter: drop-shadow(0 1px 3px rgba(255, 140, 66, 0.4));
 }
 
-/* 气泡主体样式 */
+/* 优化气泡样式，确保与整体设计一致 */
+.bubble-text {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
+  border: 1px solid rgba(214, 0, 0, 0.2);
+  border-radius: 12px;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 2px 4px rgba(214, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.bubble-text::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  background: linear-gradient(135deg, rgba(214, 0, 0, 0.1), rgba(214, 0, 0, 0.05));
+  border-radius: 13px;
+  z-index: -1;
+}
+
+/* 气泡主体样式 - 简约橙色风格 */
 .evaluation-bubble-new {
   position: absolute;
-  background: rgba(255, 122, 69, 0.95);
+  background: #ff8c42;
   color: white;
-  padding: 10px 14px;
-  padding-top: 24px; /* 修复：为内部关键词标签预留空间 */
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
+  padding: 12px 16px;
+  padding-top: 26px; /* 修复：为内部关键词标签预留空间 */
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
   min-width: 160px;
-  box-shadow: 0 4px 12px rgba(255, 122, 69, 0.3);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(255, 140, 66, 0.25);
+  border: none;
   transform: translate(-50%, -50%);
   animation: bubbleAppearNew 0.6s ease-out forwards;
   opacity: 0;
@@ -194,19 +219,21 @@
   border-top: 8px solid rgba(255, 122, 69, 0.95);
 }
 
-/* 关键词标签样式（移动到气泡内部） */
+/* 关键词标签样式 - 简约橙色风格 */
 .bubble-keyword-tag {
   position: absolute;
-  top: 4px; /* 修复：置于气泡内部 */
+  top: 6px; /* 修复：置于气泡内部 */
   left: 50%;
   transform: translateX(-50%);
-  background: #4CAF50;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 /* 响应式 */
@@ -294,7 +321,82 @@
     0 0 1px rgba(0, 0, 0, 0.15);
 }
 
-/* 若之前添加了通过 ::after 的混合模式增强，这里关闭以保持“固定白描边”的视觉一致性 */
+/* 若之前添加了通过 ::after 的混合模式增强，这里关闭以保持"固定白描边"的视觉一致性 */
 .bubble .bubble-text::after {
   content: none !important;
+}
+
+/* 新的优化气泡样式 - 双层边框设计 */
+.bubble {
+  background: #ffffff;
+  color: #666;
+  border: 1.5px solid #ff8c42;
+  border-radius: 12px;
+  padding: 1px;
+  font-size: 14px;
+  font-weight: normal;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-shadow: 0 2px 8px rgba(255, 140, 66, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  transform: translateZ(0);
+  will-change: transform;
+  position: relative;
+  transition: all 0.2s ease;
+  animation: bubbleSlideIn 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes bubbleSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateZ(0) scale(0.9) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateZ(0) scale(1) translateY(0);
+  }
+}
+
+.bubble:hover {
+  transform: translateZ(0) scale(1.02);
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.4);
+  border-color: #e67a3a;
+}
+
+.bubble:hover .bubble-text {
+  background: #ffffff;
+  border-color: #dee2e6;
+}
+
+.bubble .bubble-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 6px 10px;
+  color: #666;
+  font-size: 14px;
+  font-weight: normal;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  line-height: 1.3;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  z-index: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
