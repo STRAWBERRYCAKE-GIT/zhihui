@@ -116,93 +116,7 @@ function linesIntersect(
   return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
 }
 
-// 计算气泡到矩形边缘的最近连接点 - 确保虚线不穿透气泡
-function findNearestEdgePoint(
-  bubbleRect: { x: number; y: number; width: number; height: number },
-  dotX: number,
-  dotY: number
-): { x: number; y: number } {
-  // 计算点到气泡四条边的最近点
-  const left = bubbleRect.x;
-  const right = bubbleRect.x + bubbleRect.width;
-  const top = bubbleRect.y;
-  const bottom = bubbleRect.y + bubbleRect.height;
-  
-  // 如果点在气泡内部，返回最近的边缘点
-  if (dotX >= left && dotX <= right && dotY >= top && dotY <= bottom) {
-    const distToLeft = dotX - left;
-    const distToRight = right - dotX;
-    const distToTop = dotY - top;
-    const distToBottom = bottom - dotY;
-    
-    const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
-    
-    if (minDist === distToLeft) return { x: left, y: dotY };
-    if (minDist === distToRight) return { x: right, y: dotY };
-    if (minDist === distToTop) return { x: dotX, y: top };
-    return { x: dotX, y: bottom };
-  }
-  
-  // 计算点到气泡各边的最近点，选择距离最短的
-  let closestPoint = { x: dotX, y: dotY };
-  let minDistance = Infinity;
-  
-  // 检查左边
-  if (dotY >= top && dotY <= bottom) {
-    const distance = Math.abs(dotX - left);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestPoint = { x: left, y: dotY };
-    }
-  }
-  
-  // 检查右边
-  if (dotY >= top && dotY <= bottom) {
-    const distance = Math.abs(dotX - right);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestPoint = { x: right, y: dotY };
-    }
-  }
-  
-  // 检查上边
-  if (dotX >= left && dotX <= right) {
-    const distance = Math.abs(dotY - top);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestPoint = { x: dotX, y: top };
-    }
-  }
-  
-  // 检查下边
-  if (dotX >= left && dotX <= right) {
-    const distance = Math.abs(dotY - bottom);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestPoint = { x: dotX, y: bottom };
-    }
-  }
-  
-  // 如果点不在任何边的投影范围内，检查四个角点
-  if (minDistance === Infinity) {
-    const corners = [
-      { x: left, y: top },
-      { x: right, y: top },
-      { x: left, y: bottom },
-      { x: right, y: bottom }
-    ];
-    
-    for (const corner of corners) {
-      const distance = Math.hypot(dotX - corner.x, dotY - corner.y);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestPoint = corner;
-      }
-    }
-  }
-  
-  return { x: Math.round(closestPoint.x), y: Math.round(closestPoint.y) };
-}
+// 注释：findNearestEdgePoint 函数已被 findOptimalBubbleConnectionPoint 替代
 
 // 生成分段虚线，隐藏气泡内部的部分
 function generateSegmentedLine(
@@ -364,9 +278,7 @@ const isNormalizedRect = (r: Region | undefined) => {
 
 // 坐标模式检测：仅保留 normalized / pixel，避免误判百分比
 function detectCoordMode(
-  r: Region | undefined,
-  imageWidth: number,
-  imageHeight: number
+  r: Region | undefined
 ): 'normalized' | 'pixel' {
   if (!r) return 'pixel';
   if (isNormalizedRect(r)) return 'normalized';
@@ -408,7 +320,7 @@ function regionToContainerRect(
   imageWidth: number,
   imageHeight: number
 ) {
-  const mode = detectCoordMode(r, imageWidth, imageHeight);
+  const mode = detectCoordMode(r);
   const rx = toImagePixels(r.x, mode, imageWidth);
   const ry = toImagePixels(r.y, mode, imageHeight);
   const rw = toImagePixels(r.width || 0, mode, imageWidth);
@@ -433,7 +345,7 @@ function centerToContainerPixels(
   imageWidth: number,
   imageHeight: number
 ) {
-  const mode = detectCoordMode(r, imageWidth, imageHeight);
+  const mode = detectCoordMode(r);
   const rx = toImagePixels(r.x, mode, imageWidth);
   const ry = toImagePixels(r.y, mode, imageHeight);
 
@@ -453,74 +365,7 @@ function centerToContainerPixels(
   return { x: cx, y: cy };
 }
 
-// 自适应主体避让边距：按显示尺寸动态计算
-function subtractContentFromEmptyRect(
-  emptyRect: { x: number; y: number; width: number; height: number },
-  contentRects: Array<{ x: number; y: number; width: number; height: number }>,
-  avoidMargin: number
-) {
-  const result: Array<{ x: number; y: number; width: number; height: number }> = [emptyRect];
-
-  const intersect = (a: any, b: any) => {
-    const ix = Math.max(a.x, b.x);
-    const iy = Math.max(a.y, b.y);
-    const ax = Math.min(a.x + a.width, b.x + b.width);
-    const ay = Math.min(a.y + a.height, b.y + b.height);
-    if (ax <= ix || ay <= iy) return null;
-    return { x: ix, y: iy, width: ax - ix, height: ay - iy };
-  };
-
-  const subtractOnce = (src: any, sub: any) => {
-    const inter = intersect(src, sub);
-    if (!inter) return [src];
-    const out: any[] = [];
-    // 上
-    if (inter.y > src.y) {
-      out.push({ x: src.x, y: src.y, width: src.width, height: inter.y - src.y });
-    }
-    // 下
-    if (inter.y + inter.height < src.y + src.height) {
-      out.push({
-        x: src.x,
-        y: inter.y + inter.height,
-        width: src.width,
-        height: src.y + src.height - (inter.y + inter.height)
-      });
-    }
-    // 左
-    if (inter.x > src.x) {
-      out.push({
-        x: src.x,
-        y: inter.y,
-        width: inter.x - src.x,
-        height: inter.height
-      });
-    }
-    // 右
-    if (inter.x + inter.width < src.x + src.width) {
-      out.push({
-        x: inter.x + inter.width,
-        y: inter.y,
-        width: src.x + src.width - (inter.x + inter.width),
-        height: inter.height
-      });
-    }
-    return out;
-  };
-
-  let working = result;
-  for (const c of contentRects) {
-    const inflated = inflateRect(c, avoidMargin);
-    const next: any[] = [];
-    for (const r of working) {
-      const parts = subtractOnce(r, inflated);
-      next.push(...parts);
-    }
-    working = next.filter((p) => p.width >= 8 && p.height >= 8);
-  }
-
-  return working;
-}
+// 注释：subtractContentFromEmptyRect 函数已被新的气泡定位算法替代
 
 function computeBubbleSize(content: string, currentCount: number) {
   const baseW = 180;
@@ -533,9 +378,7 @@ function computeBubbleSize(content: string, currentCount: number) {
   return { bubbleWidth: Math.round(w * scale), bubbleHeight: Math.round(h * scale) };
 }
 
-function pointInRect(p: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) {
-  return p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
-}
+// 注释：pointInRect 函数已被内联使用
 
 const segmentIntersectsRect = (
   p1: { x: number; y: number },
@@ -606,147 +449,11 @@ function nearestPointInRectToPoint(
   return { x, y };
 }
 
-function allowedCenterBounds(
-  subRect: { x: number; y: number; width: number; height: number },
-  bubbleWidth: number,
-  bubbleHeight: number
-) {
-  const minCx = subRect.x + bubbleWidth / 2;
-  const minCy = subRect.y + bubbleHeight / 2;
-  const maxCx = subRect.x + subRect.width - bubbleWidth / 2;
-  const maxCy = subRect.y + subRect.height - bubbleHeight / 2;
-  return { minCx, maxCx, minCy, maxCy };
-}
+// 注释：allowedCenterBounds 和 farthestCenterFromDotInBounds 函数已被新的气泡定位算法替代
 
-function farthestCenterFromDotInBounds(
-  dotX: number,
-  dotY: number,
-  bounds: { minCx: number; maxCx: number; minCy: number; maxCy: number }
-) {
-  const candidates = [
-    { x: bounds.minCx, y: bounds.minCy },
-    { x: bounds.minCx, y: bounds.maxCy },
-    { x: bounds.maxCx, y: bounds.minCy },
-    { x: bounds.maxCx, y: bounds.maxCy }
-  ];
-  let best = candidates[0];
-  let bestDist = -Infinity;
-  for (const c of candidates) {
-    const d = Math.hypot(c.x - dotX, c.y - dotY);
-    if (d > bestDist) { bestDist = d; best = c; }
-  }
-  return best;
-}
+// 注释：placeBubbleInLargestNearestEmpty 函数已被 findOptimalPositionInEmptyRegions 替代
 
-function placeBubbleInLargestNearestEmpty(
-  dotX: number,
-  dotY: number,
-  bubbleWidth: number,
-  bubbleHeight: number,
-  emptyRects: { x: number; y: number; width: number; height: number }[],
-  contentRects: { x: number; y: number; width: number; height: number }[],
-  usedBubbleRects: { x: number; y: number; width: number; height: number }[],
-  containerWidth: number,
-  containerHeight: number,
-  ctx: CanvasRenderingContext2D | null,
-  imageWidth: number,
-  imageHeight: number
-) {
-  const avoidMargin = Math.round(Math.min(containerWidth, containerHeight) * 0.018);
-  const candidates: { x: number; y: number; width: number; height: number }[] = [];
-  for (const r of emptyRects) {
-    const subRects = subtractContentFromEmptyRect(r, contentRects, avoidMargin);
-    for (const s of subRects) {
-      if (s.width < bubbleWidth || s.height < bubbleHeight) continue;
-      const bounds = allowedCenterBounds(s, bubbleWidth, bubbleHeight);
-      const center = farthestCenterFromDotInBounds(dotX, dotY, bounds);
-      const rect = { x: Math.round(center.x - bubbleWidth / 2), y: Math.round(center.y - bubbleHeight / 2), width: bubbleWidth, height: bubbleHeight };
-      candidates.push(rect);
-    }
-  }
-
-  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-  // 先尝试不与已放置气泡重叠的候选
-  for (const rect of candidates) {
-    let overlapBubble = false;
-    for (const u of usedBubbleRects) {
-      if (rectsOverlap(rect, u)) { overlapBubble = true; break; }
-    }
-    if (overlapBubble) continue;
-
-    if (!overlapsWithContent(rect, contentRects, CONTENT_AVOID_MARGIN)) {
-      return rect;
-    }
-  }
-
-  // 无法避开已放气泡，则选一个面积最大且离 anchor 更远的
-  let best: { x: number; y: number; width: number; height: number } | null = null;
-  let bestDist = -Infinity;
-  for (const rect of candidates) {
-    const cx = rect.x + rect.width / 2;
-    const cy = rect.y + rect.height / 2;
-    const dist = Math.hypot(cx - dotX, cy - dotY);
-    if (dist > bestDist) {
-      best = rect;
-      bestDist = dist;
-    }
-  }
-  return best || null;
-}
-
-function radialSearchInEmptyRects(
-  dotX: number,
-  dotY: number,
-  bubbleWidth: number,
-  bubbleHeight: number,
-  emptyRects: { x: number; y: number; width: number; height: number }[],
-  contentRects: { x: number; y: number; width: number; height: number }[],
-  usedBubbleRects: { x: number; y: number; width: number; height: number }[],
-  containerWidth: number,
-  containerHeight: number,
-  ctx: CanvasRenderingContext2D | null,
-  imageWidth: number,
-  imageHeight: number
-) {
-  const avoidMargin = Math.round(Math.min(containerWidth, containerHeight) * 0.016);
-  const steps = 8;
-  const radiusInc = Math.round(Math.min(containerWidth, containerHeight) * 0.04);
-
-  for (let r = radiusInc; r <= radiusInc * 3; r += radiusInc) {
-    for (let i = 0; i < steps; i++) {
-      const angle = (i / steps) * 2 * Math.PI;
-      const cx = dotX + Math.round(Math.cos(angle) * r);
-      const cy = dotY + Math.round(Math.sin(angle) * r);
-      const rect = clampRectToContainer(
-        { x: Math.round(cx - bubbleWidth / 2), y: Math.round(cy - bubbleHeight / 2), width: bubbleWidth, height: bubbleHeight },
-        containerWidth, containerHeight
-      );
-
-      // 避免与已放置气泡重叠
-      let overlapBubble = false;
-      for (const u of usedBubbleRects) {
-        if (rectsOverlap(rect, u)) { overlapBubble = true; break; }
-      }
-      if (overlapBubble) continue;
-
-      // 避免连接线穿过主体内容
-      const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-      let crosses = false;
-      for (const c of contentRects) {
-        if (segmentIntersectsRect({ x: dotX, y: dotY }, center, c)) { crosses = true; break; }
-      }
-      if (crosses) continue;
-
-      // 避免靠近主体：用空白度评分兜底
-      const emptyScore = computeEmptinessScoreForRect(rect, containerWidth, containerHeight, imageWidth, imageHeight, ctx);
-      if (emptyScore < MIN_EMPTY_SCORE) continue;
-
-      return rect;
-    }
-  }
-
-  return null;
-}
+// 注释：radialSearchInEmptyRects 函数已被 intelligentRadialSearch 替代
 
 function adjustBubbleToAvoidLineCrossing(
   initialRect: { x: number; y: number; width: number; height: number },
@@ -1496,42 +1203,104 @@ export default function ImageBubbles({
             
             return isValid;
           });
+
+          // 验证连接完整性的函数
+          const validateConnections = (bubbleInfos: any[]) => {
+            const validConnections: any[] = [];
+            const invalidBubbles: any[] = [];
+
+            bubbleInfos.forEach((info) => {
+              const { bubble: b, index, externalDot, rect } = info;
+              
+              // 检查是否能找到有效的内部连接点
+              const bubbleConnectionPoint = findOptimalBubbleConnectionPoint(
+                rect,
+                externalDot.x,
+                externalDot.y,
+                bubbleInfos.map(bi => ({ rect: bi.rect, dotX: bi.externalDot.x, dotY: bi.externalDot.y })),
+                index
+              );
+              
+              // 生成虚线段
+              const lineSegments = generateSegmentedLine(
+                externalDot,
+                bubbleConnectionPoint,
+                rect
+              );
+              
+              // 验证连接有效性
+              const hasValidConnection = lineSegments.length > 0 && 
+                lineSegments.some(segment => {
+                  const segmentLength = Math.hypot(
+                    segment.end.x - segment.start.x, 
+                    segment.end.y - segment.start.y
+                  );
+                  return segmentLength > 2; // 至少有2像素长的可见线段
+                });
+              
+              if (hasValidConnection) {
+                validConnections.push({
+                  ...info,
+                  bubbleConnectionPoint,
+                  lineSegments
+                });
+              } else {
+                invalidBubbles.push(info);
+                console.warn('❌ 气泡连接验证失败:', {
+                  气泡ID: b.id,
+                  内容: b.content,
+                  外部点: externalDot,
+                  内部连接点: bubbleConnectionPoint,
+                  线段数量: lineSegments.length,
+                  原因: lineSegments.length === 0 ? '无法生成虚线段' : '虚线段过短'
+                });
+              }
+            });
+
+            console.log('🔍 连接验证结果:', {
+              总气泡数: bubbleInfos.length,
+              有效连接数: validConnections.length,
+              无效连接数: invalidBubbles.length,
+              连接成功率: `${((validConnections.length / bubbleInfos.length) * 100).toFixed(1)}%`,
+              无效气泡详情: invalidBubbles.map(info => ({
+                ID: info.bubble.id,
+                内容: info.bubble.content
+              }))
+            });
+
+            return validConnections;
+          };
+
+          // 执行连接验证，只渲染有效连接的气泡
+          const validBubbleInfos = validateConnections(bubbleInfos);
           
-          console.log('📊 坐标验证结果:', {
-            有效气泡数量: bubbleInfos.length,
-            被过滤的气泡数量: bubbles.length - bubbleInfos.length,
-            有效气泡详情: bubbleInfos.map(info => ({
+          // 将验证结果存储到全局变量，供HTML渲染使用
+          (window as any).__validBubbleInfos = validBubbleInfos;
+          
+          console.log('📊 连接验证后的结果:', {
+            原始气泡数量: bubbles.length,
+            坐标有效气泡数量: bubbleInfos.length,
+            连接有效气泡数量: validBubbleInfos.length,
+            被过滤的气泡数量: bubbles.length - validBubbleInfos.length,
+            连接有效气泡详情: validBubbleInfos.map(info => ({
               ID: info.bubble.id,
+              内容: info.bubble.content,
               外部点: info.externalDot,
-              气泡中心: info.bubbleCenter
+              气泡中心: info.bubbleCenter,
+              虚线段数: info.lineSegments.length
             }))
           });
 
-          const renderedConnections = bubbleInfos.map((info) => {
-            const { bubble: b, index, externalDot, bubbleCenter, rect } = info;
-            
-            // 为每个气泡找到最佳的内部连接点
-            const bubbleConnectionPoint = findOptimalBubbleConnectionPoint(
-              rect,
-              externalDot.x,
-              externalDot.y,
-              bubbleInfos.map(bi => ({ rect: bi.rect, dotX: bi.externalDot.x, dotY: bi.externalDot.y })),
-              index
-            );
-            
-            // 生成分段虚线，隐藏气泡内部的部分
-            const lineSegments = generateSegmentedLine(
-              externalDot,
-              bubbleConnectionPoint,
-              rect
-            );
+          // 使用已验证的连接信息直接渲染
+          const renderedConnections = validBubbleInfos.map((info) => {
+            const { bubble: b, externalDot, bubbleConnectionPoint, lineSegments } = info;
             
             // 统计每个气泡的连接信息
             console.log(`🔗 气泡 ${b.id} 连接统计:`, {
               外部点坐标: externalDot,
               内部连接点: bubbleConnectionPoint,
               虚线段数: lineSegments.length,
-              线段详情: lineSegments.map((seg, i) => ({
+              线段详情: lineSegments.map((seg: any, i: number) => ({
                 段号: i + 1,
                 起点: seg.start,
                 终点: seg.end,
@@ -1540,11 +1309,11 @@ export default function ImageBubbles({
             });
             
             // 调试信息（开发时可用）
-            if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+            if (typeof window !== 'undefined' && (window as any).__DEV__) {
               console.log(`气泡 ${b.id} 连线调试:`, {
                 外部点: externalDot,
-                气泡中心: bubbleCenter,
-                气泡矩形: rect,
+                气泡中心: info.bubbleCenter,
+                气泡矩形: info.rect,
                 内部连接点: bubbleConnectionPoint,
                 线段数量: lineSegments.length
               });
@@ -1553,7 +1322,7 @@ export default function ImageBubbles({
             return (
               <g key={`annotation-${b.id}`}>
                 {/* 分段虚线 - 隐藏气泡内部部分 */}
-                {lineSegments.map((segment, segIndex) => (
+                {lineSegments.map((segment: any, segIndex: number) => (
                   <line
                     key={`line-${b.id}-${segIndex}`}
                     x1={snap(segment.start.x)}
@@ -1591,7 +1360,7 @@ export default function ImageBubbles({
                 />
                 
                 {/* 气泡内部连接点（可选，用于调试） */}
-                {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (
+                {typeof window !== 'undefined' && (window as any).__DEV__ && (
                   <circle 
                     cx={snap(bubbleConnectionPoint.x)} 
                     cy={snap(bubbleConnectionPoint.y)} 
@@ -1607,17 +1376,20 @@ export default function ImageBubbles({
           // 最终统计汇总
           console.log('📈 最终连接统计汇总:', {
             原始气泡总数: bubbles.length,
-            有效气泡数量: bubbleInfos.length,
+            坐标有效气泡数量: bubbleInfos.length,
+            连接有效气泡数量: validBubbleInfos.length,
             渲染的连接数: renderedConnections.length,
-            连接完整性: renderedConnections.length === bubbleInfos.length ? '✅ 完整' : '❌ 不完整',
+            连接完整性: renderedConnections.length === validBubbleInfos.length ? '✅ 完整' : '❌ 不完整',
             数量匹配检查: {
-              '原始气泡 → 有效气泡': bubbleInfos.length === bubbles.length ? '✅ 全部有效' : `⚠️ 有${bubbles.length - bubbleInfos.length}个无效气泡被过滤`,
-              '有效气泡 → 渲染连接': renderedConnections.length === bubbleInfos.length ? '✅ 一一对应' : `❌ 不匹配 (${renderedConnections.length}/${bubbleInfos.length})`,
-              '每个气泡都有虚线': renderedConnections.length > 0 ? '✅ 是' : '❌ 否'
+              '原始气泡 → 坐标有效': bubbleInfos.length === bubbles.length ? '✅ 全部有效' : `⚠️ 有${bubbles.length - bubbleInfos.length}个坐标无效气泡被过滤`,
+              '坐标有效 → 连接有效': validBubbleInfos.length === bubbleInfos.length ? '✅ 全部连接有效' : `⚠️ 有${bubbleInfos.length - validBubbleInfos.length}个连接无效气泡被过滤`,
+              '连接有效 → 渲染连接': renderedConnections.length === validBubbleInfos.length ? '✅ 一一对应' : `❌ 不匹配 (${renderedConnections.length}/${validBubbleInfos.length})`,
+              '每个显示的气泡都有虚线': renderedConnections.length > 0 ? '✅ 是' : '❌ 否'
             },
             详细信息: {
-              被过滤的原因: bubbles.length !== bubbleInfos.length ? '存在无效坐标的气泡' : '无',
-              预期虚线数量: bubbleInfos.length,
+              坐标无效原因: bubbles.length !== bubbleInfos.length ? '存在无效坐标的气泡' : '无',
+              连接无效原因: bubbleInfos.length !== validBubbleInfos.length ? '存在无法生成有效虚线的气泡' : '无',
+              预期虚线数量: validBubbleInfos.length,
               实际虚线数量: renderedConnections.length
             }
           });
@@ -1626,36 +1398,50 @@ export default function ImageBubbles({
         })()}
       </svg>
 
-      {bubbles.map((b) => {
-        const bubbleWidth = b.width || 160;
-        const bubbleHeight = b.height || 80;
-        const centerX = ((b.position.bubbleX || 0) / 100) * containerSize.width;
-        const centerY = ((b.position.bubbleY || 0) / 100) * containerSize.height;
-        const left = centerX - bubbleWidth / 2;
-        const top = centerY - bubbleHeight / 2;
-        const leftPx = Math.round(left);
-        const topPx = Math.round(top);
-        return (
-          <div
-            key={b.id}
-            className="bubble"
-            style={{
-              position: 'absolute',
-              left: `${leftPx}px`,
-              top: `${topPx}px`,
-              width: `${bubbleWidth}px`,
-              height: `${bubbleHeight}px`,
-              maxWidth: '280px',
-              pointerEvents: 'auto',
-              color: '#d60000',
-              zIndex: 3,
-              willChange: 'transform'
-            }}
-          >
-            <span className="bubble-text" data-text={b.content}>{b.content}</span>
-          </div>
-        );
-      })}
+      {(() => {
+        // 重用SVG验证的结果，确保一致性
+        const validBubbleInfos = (window as any).__validBubbleInfos || [];
+        const validBubbles = validBubbleInfos.map((info: any) => info.bubble);
+
+        console.log('🎨 气泡HTML渲染统计:', {
+          原始气泡数量: bubbles.length,
+          连接有效气泡数量: validBubbles.length,
+          被过滤的气泡数量: bubbles.length - validBubbles.length,
+          SVG和HTML一致性检查: '✅ 重用SVG验证结果'
+        });
+
+        // 只渲染通过连接验证的气泡
+        return validBubbles.map((b: any) => {
+          const bubbleWidth = b.width || 160;
+          const bubbleHeight = b.height || 80;
+          const centerX = ((b.position.bubbleX || 0) / 100) * containerSize.width;
+          const centerY = ((b.position.bubbleY || 0) / 100) * containerSize.height;
+          const left = centerX - bubbleWidth / 2;
+          const top = centerY - bubbleHeight / 2;
+          const leftPx = Math.round(left);
+          const topPx = Math.round(top);
+          return (
+            <div
+              key={b.id}
+              className="bubble"
+              style={{
+                position: 'absolute',
+                left: `${leftPx}px`,
+                top: `${topPx}px`,
+                width: `${bubbleWidth}px`,
+                height: `${bubbleHeight}px`,
+                maxWidth: '280px',
+                pointerEvents: 'auto',
+                color: '#d60000',
+                zIndex: 3,
+                willChange: 'transform'
+              }}
+            >
+              <span className="bubble-text" data-text={b.content}>{b.content}</span>
+            </div>
+          );
+        });
+      })()}
     </div>
   );
 }
