@@ -8,9 +8,8 @@ import axios from 'axios';
 import RadarChart, { Dimension } from './components/RadarChart';
 import DimensionDetail from './components/DimensionDetail';
 import ScoreRing from './components/ScoreRing';
-import ErrorBoundary from './components/ErrorBoundary';
 import ImageBubbles from './components/ImageBubbles';
-import { filterEvaluationText } from './utils/textFilter';
+
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -19,7 +18,11 @@ function App() {
   const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
   const [evaluation, setEvaluation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
+  const [evaluating, setEvaluating] = useState<boolean>(false);
+  const [currentImageId, setCurrentImageId] = useState<number | null>(null);
+  const [evaluationCompleted, setEvaluationCompleted] = useState<boolean>(false);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [annotationCompleted, setAnnotationCompleted] = useState<boolean>(false);
   // 历史记录状态
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
@@ -121,30 +124,44 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      // 立即设置评分与区域映射，避免评分区空白
-      setEvaluation({
-        score: response.data?.score ?? 0,
-        strengths: Array.isArray(response.data?.strengths) ? response.data.strengths : [],
-        suggestions: Array.isArray(response.data?.suggestions) ? response.data.suggestions : [],
-        dimensions: Array.isArray(response.data?.dimensions) ? response.data.dimensions : [],
-        filename: response.data?.original_name ?? response.data?.filename ?? '',
-        empty_regions: Array.isArray(response.data?.empty_regions) ? response.data.empty_regions : [],
-        content_regions: Array.isArray(response.data?.content_regions) ? response.data.content_regions : [],
-        text_region_mapping: Array.isArray(response.data?.text_region_mapping) ? response.data.text_region_mapping : []
-      });
-
-      // 仅使用关键词映射文本驱动气泡显示
-      const mapped = Array.isArray(response.data?.text_region_mapping)
-        ? response.data.text_region_mapping
-            .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
-            .filter((t: string) => t.length > 0)
-        : [];
-      setBubbleSentences(mapped);
-      setShowBubbles(mapped.length > 0);
-
-      // 先结束上传态，让评分/气泡先出现
-      setUploading(false);
+      const { image_id, filename, original_name } = response.data;
+      setCurrentImageId(image_id);
       setUploadSuccess(true);
+      setUploading(false);
+      setEvaluationCompleted(false);
+      setEvaluation({
+        filename: original_name,
+        strengths: [],
+        suggestions: [],
+        dimensions: [],
+        empty_regions: [],
+        content_regions: [],
+        text_region_mapping: []
+      });
+      // // 立即设置评分与区域映射，避免评分区空白
+      // setEvaluation({
+      //   score: response.data?.score ?? 0,
+      //   strengths: Array.isArray(response.data?.strengths) ? response.data.strengths : [],
+      //   suggestions: Array.isArray(response.data?.suggestions) ? response.data.suggestions : [],
+      //   dimensions: Array.isArray(response.data?.dimensions) ? response.data.dimensions : [],
+      //   filename: response.data?.original_name ?? response.data?.filename ?? '',
+      //   empty_regions: Array.isArray(response.data?.empty_regions) ? response.data.empty_regions : [],
+      //   content_regions: Array.isArray(response.data?.content_regions) ? response.data.content_regions : [],
+      //   text_region_mapping: Array.isArray(response.data?.text_region_mapping) ? response.data.text_region_mapping : []
+      // });
+
+      // // 仅使用关键词映射文本驱动气泡显示
+      // const mapped = Array.isArray(response.data?.text_region_mapping)
+      //   ? response.data.text_region_mapping
+      //       .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
+      //       .filter((t: string) => t.length > 0)
+      //   : [];
+      // setBubbleSentences(mapped);
+      // setShowBubbles(mapped.length > 0);
+
+      // // 先结束上传态，让评分/气泡先出现
+      // setUploading(false);
+      // setUploadSuccess(true);
 
       // 历史后台加载（不阻塞UI）
       loadHistoryRecords();
@@ -173,9 +190,136 @@ function App() {
     }
   };
 
+  // const handleEvaluate = async () => {
+  // if (!currentImageId) {
+  //   setError('没有可评价的图片');
+  //   return;
+  // }
+  // setEvaluating(true);
+  // setError(null);
+  // try {
+  //   const response = await axios.post(`/image/evaluate/${currentImageId}`);
+  //   const data = response.data;
+
+  //   setEvaluation({
+  //     score: data.score ?? 0,
+  //     strengths: Array.isArray(data.strengths) ? data.strengths : [],
+  //     suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+  //     dimensions: Array.isArray(data.dimensions) ? data.dimensions : [],
+  //     filename: evaluation?.filename || '',
+  //     empty_regions: Array.isArray(data.empty_regions) ? data.empty_regions : [],
+  //     content_regions: Array.isArray(data.content_regions) ? data.content_regions : [],
+  //     text_region_mapping: Array.isArray(data.text_region_mapping) ? data.text_region_mapping : []
+  //   });
+
+  //   const mapped = Array.isArray(data.text_region_mapping)
+  //     ? data.text_region_mapping
+  //         .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
+  //         .filter((t: string) => t.length > 0)
+  //     : [];
+  //   setBubbleSentences(mapped);
+  //   setShowBubbles(mapped.length > 0);
+  //   setEvaluationCompleted(true);
+  // } catch (err: any) {
+  //   let errorMessage = '评价失败，请稍后重试';
+  //   if (err.response?.data?.message) errorMessage = err.response.data.message;
+  //   setError(errorMessage);
+  //   setEvaluationCompleted(false);
+  // } finally {
+  //   setEvaluating(false);
+  // }
+  // };
+  const handleEvaluate = async () => {
+    if (!currentImageId) {
+      setError('没有可评价的图片');
+      return;
+    }
+    setEvaluating(true);
+    setError(null);
+    try {
+      const response = await axios.post(`/image/evaluate/${currentImageId}`);
+      const data = response.data;
+
+      // 立即设置评价数据（不含批注）
+      setEvaluation({
+        score: data.score ?? 0,
+        strengths: Array.isArray(data.strengths) ? data.strengths : [],
+        suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+        dimensions: Array.isArray(data.dimensions) ? data.dimensions : [],
+        filename: evaluation?.filename || '',
+        empty_regions: [],            // 批注尚未生成
+        content_regions: [],
+        text_region_mapping: []
+      });
+      setEvaluationCompleted(true);
+      setEvaluating(false);
+
+      // 开始轮询批注状态
+      startPolling(currentImageId);
+
+    } catch (err: any) {
+      // 错误处理...
+      setEvaluating(false);
+    }
+  };
+
+  const startPolling = (imageId: number) => {
+    // 清除之前的轮询
+    if (pollingInterval) clearInterval(pollingInterval);
+
+    const poll = async () => {
+      try {
+        const res = await axios.get(`/image/${imageId}`);
+        const img = res.data;
+
+        // 如果批注字段已有数据，认为批注完成
+        if (img.text_region_mapping && img.text_region_mapping.length > 0) {
+          // 更新 evaluation 中的批注相关字段
+          setEvaluation((prev: any) => ({
+            ...prev,
+            empty_regions: img.empty_regions || [],
+            content_regions: img.content_regions || [],
+            text_region_mapping: img.text_region_mapping || []
+          }));
+
+          // 更新气泡句子
+          const mapped = (img.text_region_mapping || [])
+            .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
+            .filter((t: string) => t.length > 0);
+          setBubbleSentences(mapped);
+          setShowBubbles(mapped.length > 0);
+          setAnnotationCompleted(true);
+
+          // 停止轮询
+          if (pollingInterval) clearInterval(pollingInterval);
+          setPollingInterval(null);
+        } else if (img.status === 'FAILED') {
+          // 批注失败，停止轮询并提示
+          setError('批注生成失败');
+          if (pollingInterval) clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+        // 否则继续轮询
+      } catch (err) {
+        console.error('轮询批注失败:', err);
+      }
+    };
+
+    // 立即执行一次
+    poll();
+    // 每 2 秒轮询
+    const interval = setInterval(poll, 2000);
+    setPollingInterval(interval);
+  };
   const handleVideoExplanation = () => {
     alert('视频讲解功能尚未实现');
   };
+
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
+  }, [pollingInterval]);
 
   // 退出登录
   const handleLogout = () => {
@@ -508,22 +652,41 @@ function App() {
               {/* 主内容区 */}
               <main className="main-content">
                 <div className="section-title">素描</div>
-
                 {/* 气泡控制按钮 */}
-                {selectedImage && bubbleSentences.length > 0 && (
-                  <button
-                    className="bubble-control-btn-aligned"
-                    onClick={toggleBubbles}
-                    title={showBubbles ? '隐藏评价气泡' : '显示评价气泡'}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                      <line x1="9" y1="9" x2="9.01" y2="9" />
-                      <line x1="15" y1="9" x2="15.01" y2="9" />
-                    </svg>
-                    {showBubbles ? '隐藏气泡' : '显示气泡'}
-                  </button>
+                {selectedImage && (
+                  <>
+                    {evaluationCompleted && !annotationCompleted ? (
+                      // 评价已完成，批注生成中 → 显示禁用按钮
+                      <button
+                        className="bubble-control-btn-aligned disabled"
+                        disabled
+                        title="批注正在生成中，请稍候..."
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                          <line x1="9" y1="9" x2="9.01" y2="9" />
+                          <line x1="15" y1="9" x2="15.01" y2="9" />
+                        </svg>
+                        批注生成中
+                      </button>
+                    ) : annotationCompleted && bubbleSentences.length > 0 ? (
+                      // 批注已完成且有气泡句子 → 显示可切换按钮
+                      <button
+                        className="bubble-control-btn-aligned"
+                        onClick={toggleBubbles}
+                        title={showBubbles ? '隐藏评价气泡' : '显示评价气泡'}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                          <line x1="9" y1="9" x2="9.01" y2="9" />
+                          <line x1="15" y1="9" x2="15.01" y2="9" />
+                        </svg>
+                        {showBubbles ? '隐藏气泡' : '显示气泡'}
+                      </button>
+                    ) : null}
+                  </>
                 )}
 
                 <div className="upload-container">
@@ -587,7 +750,7 @@ function App() {
                   评分结果
                 </div>
                 <div className="score-content">
-                  {evaluation ? (
+                  {evaluation && evaluation.score !== undefined ? (
                     <>
                       {selectedDimension ? (
                         <DimensionDetail dimension={selectedDimension} onBack={handleBackFromDetail} />
@@ -616,23 +779,37 @@ function App() {
                                 ))}
                               </ul>
                             </div>
-                          )}
+                            )}
+                          <button className="video-button" onClick={handleVideoExplanation}>
+                            <span className="video-icon">▶</span> 视频讲解
+                          </button>
                         </>
                       )}
                     </>
-                  ) : selectedImage ? (
-                    <div className="loading-score">
-                      <p>正在生成评价...</p>
-                    </div>
+                  ) :selectedImage ? (
+                    evaluating ? (
+                      <div className="loading-score">
+                        <p>正在生成评价...</p>
+                      </div>
+                    ) : (
+                      <div className="empty-score">
+                          <p>图片已上传，点击“开始评价”获取评分</p>
+                      </div>
+                          
+                    )
                   ) : (
                     <div className="empty-score">
                       <p>请上传图片以获取评分</p>
                     </div>
-                  )}
+                  )
+                }
+                {selectedImage && !evaluationCompleted && !evaluating && currentImageId && (
+                    <button className="evaluate-btn" onClick={handleEvaluate}>
+                      开始评价
+                    </button>
+                )}
                 </div>
-                <button className="video-button" onClick={handleVideoExplanation}>
-                  <span className="video-icon">▶</span> 视频讲解
-                </button>
+
               </aside>
             </div>
           ) : (

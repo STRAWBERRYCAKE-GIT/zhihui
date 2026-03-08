@@ -1,4 +1,3 @@
-from flask_cors import CORS
 from zhihui import create_app
 
 app = create_app()

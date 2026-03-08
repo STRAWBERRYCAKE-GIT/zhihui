@@ -435,7 +435,7 @@ def calculate_bubble_positions(
     
     # 按置信度排序
     all_positions.sort(key=lambda p: p["confidence"], reverse=True)
-    
+    print(f"检测到的候选位置（含内容区域加权）: {all_positions}")
     if not all_positions:
         # 如果没有检测到任何区域，返回默认位置
         return [
@@ -601,7 +601,6 @@ def find_optimal_bubble_positions(image_stream, num_bubbles=5):
     return bubble_positions
 
 # 新增：检测图片中的内容丰富区域
-# 修复detect_content_regions函数
 def detect_content_regions(image_stream, num_regions=5):
     """使用DINOv3模型检测图片中最有内容的区域"""
     try:

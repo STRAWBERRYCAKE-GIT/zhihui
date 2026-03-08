@@ -3,9 +3,8 @@ import base64
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
-import re
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))  # 加载项目根目录的 .env 文件
+load_dotenv()  # 自动加载 .env 文件
 client = OpenAI(
     base_url='https://api.openai-proxy.org/v1',
     api_key=os.getenv("OPENAI_API_KEY")

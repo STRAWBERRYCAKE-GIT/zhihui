@@ -62,7 +62,7 @@ pip install transformers
 pip install torch pillow numpy safetensors
 pip install openai
 pip install python-dotenv
-```
+ ```
 
 # 更新
 
@@ -89,26 +89,32 @@ npm install chart.js react-chartjs-2
 # 目录结构
 
 ```
-zhihui
+zhihui_to-c
 ├─ backend
 │  ├─ app.py
-│  ├─ requirement.txt
+│  ├─ requirements.txt
 │  └─ zhihui
+│     ├─ advanced_image_analyzer.py
 │     ├─ api
 │     │  ├─ image.py
 │     │  └─ user.py
-│     ├─ models
+│     ├─ clip_adapter.py
 │     ├─ utils
+│     │  ├─ clip_cn_integration.py
 │     │  ├─ database.py
+│     │  ├─ dinov3_integration.py
+│     │  ├─ keyword_lexicon.json
 │     │  ├─ VLM_api.py
 │     │  └─ __init__.py
 │     └─ __init__.py
 ├─ frontend
 │  ├─ .eslintrc.cjs
+│  ├─ frontend
+│  │  ├─ package-lock.json
+│  │  └─ package.json
 │  ├─ index.html
 │  ├─ package-lock.json
 │  ├─ package.json
-│  ├─ public
 │  ├─ src
 │  │  ├─ App.css
 │  │  ├─ App.tsx
@@ -116,8 +122,19 @@ zhihui
 │  │  │  ├─ AuthProvider.tsx
 │  │  │  ├─ Login.tsx
 │  │  │  └─ Register.tsx
+│  │  ├─ components
+│  │  │  ├─ DimensionDetail.tsx
+│  │  │  ├─ ErrorBoundary.tsx
+│  │  │  ├─ ImageBubbles.css
+│  │  │  ├─ ImageBubbles.tsx
+│  │  │  ├─ RadarChart.tsx
+│  │  │  ├─ ScoreRing.css
+│  │  │  └─ ScoreRing.tsx
 │  │  ├─ index.css
-│  │  └─ main.tsx
+│  │  ├─ main.tsx
+│  │  └─ utils
+│  │     ├─ README.md
+│  │     └─ textFilter.ts
 │  ├─ tsconfig.json
 │  └─ tsconfig.node.json
 └─ ReadMe.md
@@ -182,31 +199,42 @@ zhihui
   ```
    CREATE DATABASE zhihui_db;
    USE zhihui_db;
-   CREATE TABLE users(
-      -> id INT AUTO_INCREMENT PRIMARY KEY,
-      -> username VARCHAR(50) UNIQUE NOT NULL,
-      -> password VARCHAR(255) NOT NULL,
-      -> created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-   );
-   CREATE TABLE images (
-    -> id INT AUTO_INCREMENT PRIMARY KEY,
-      -> user_id INT NOT NULL,
-    -> filename VARCHAR(255) NOT NULL,
-      -> original_name VARCHAR(255) NOT NULL,
-      -> score INT,
-      -> evaluation TEXT,
-      ->strengths TEXT,
-      ->improvements TEXT,
-      -> upload_time DATETIME NOT NULL,
-      -> FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
+   
+  -- zhihui_db.users definition
+  
+  CREATE TABLE `users` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `username` varchar(50) NOT NULL,
+    `password` varchar(255) NOT NULL,
+    `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `username` (`username`)
+  ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  
+  -- zhihui_db.images definition
+  
+  CREATE TABLE `images` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NOT NULL,
+    `score` int DEFAULT NULL,
+    `upload_time` datetime NOT NULL,
+    `strengths` text,
+    `image_url` varchar(500) NOT NULL,
+    `suggestions` text,
+    `dimensions` json DEFAULT NULL,
+    `original_name` varchar(255) DEFAULT NULL,
+    `filename` varchar(64) NOT NULL,
+    `empty_regions` json DEFAULT NULL,
+    `categorized_keywords` longtext,
+    `content_regions` json DEFAULT NULL,
+    `keyword_matches` longtext,
+    `text_region_mapping` json DEFAULT NULL,
+    `keyword_mentions` longtext,
+    PRIMARY KEY (`id`),
+    KEY `user_id` (`user_id`),
+    CONSTRAINT `images_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
   ```
-
-  ``describe users``,``describe images``，两张表的结构如下所示
-
-  ![image-20250917154249499](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917154249499.png)
-
-  ![image-20250917170125091](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20250917170125091.png)
 
   
 
