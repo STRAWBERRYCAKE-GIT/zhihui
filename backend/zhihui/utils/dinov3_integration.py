@@ -1,6 +1,8 @@
-# 添加PyTorch导入
 import torch
-
+import hashlib
+import numpy as np
+from scipy.ndimage import zoom
+import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import os
@@ -8,6 +10,18 @@ import json
 from typing import List, Dict
 import io
 from safetensors.torch import load_file as safe_load_file
+
+# 特征图缓存路径生成
+def get_feature_cache_path(image_id, cache_dir):
+    """
+    根据图片ID生成特征图缓存文件的路径
+    """
+    if image_id is None:
+        return None
+    # 使用image_id作为文件名
+    cache_subdir = os.path.join(cache_dir, 'feature_maps')
+    os.makedirs(cache_subdir, exist_ok=True)
+    return os.path.join(cache_subdir, f"{image_id}.npy")
 
 # 设置模型路径 - 使用相对路径
 MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'dinov3_model')
@@ -289,7 +303,7 @@ if hasattr(model, 'to'):
     model = model.to(device)
 
 # 检测空白区域的函数
-def detect_blank_spaces(image_stream, focus_on_content=True) -> List[Dict[str, float]]:
+def detect_blank_spaces(image_stream, focus_on_content=True, cache_dir=None, image_id=None) -> List[Dict[str, float]]:
     """
     检测图像中的空白区域或内容区域并返回最佳气泡放置位置
     focus_on_content: True时更关注内容区域，False时更关注空白区域
@@ -302,7 +316,7 @@ def detect_blank_spaces(image_stream, focus_on_content=True) -> List[Dict[str, f
         # 应用预处理
         inputs = processor(images=[image], return_tensors="pt")
         if isinstance(inputs, dict):
-            # 修复：确保输入数据类型为float32
+            # 确保输入数据类型为float32
             inputs = {k: v.to(device).to(dtype=torch.float32) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
         
         # 使用模型提取图像特征
@@ -330,7 +344,13 @@ def detect_blank_spaces(image_stream, focus_on_content=True) -> List[Dict[str, f
                 print(f"特征提取失败: {e}")
                 # 生成基于图像内容的特征
                 feature_variance = compute_brightness_based_features(image)
-        
+
+         # 缓存特征图
+        if cache_dir is not None and image_id is not None:
+            cache_path = get_feature_cache_path(image_id, cache_dir)
+            np.save(cache_path, feature_variance)
+            print(f"特征图已缓存到: {cache_path}")
+
         # 识别目标区域
         # 根据focus_on_content决定是选择高方差区域还是低方差区域
         if focus_on_content:
@@ -389,6 +409,75 @@ def detect_blank_spaces(image_stream, focus_on_content=True) -> List[Dict[str, f
         # 返回默认位置作为备选
         return []
 
+def generate_heatmap(image_stream, output_path, cache_dir=None, image_id=None):
+    """
+    生成 DINOv3 特征热力图并保存
+    :param image_stream: 图像文件流
+    :param output_path: 保存热力图的完整路径（含文件名）
+    :param cache_dir: 缓存目录
+    :param image_id: 图片ID
+    :return: 热力图图像路径
+    """
+    try:
+        image = Image.open(image_stream).convert("RGB")
+        original_width, original_height = image.size
+
+        # 尝试从缓存加载特征图
+        feature_map = None
+        if cache_dir is not None and image_id is not None:
+            cache_path = get_feature_cache_path(image_id, cache_dir)
+            if os.path.exists(cache_path):
+                feature_map = np.load(cache_path)
+                print("从缓存加载特征图")
+
+        if feature_map is None:
+            # 缓存不存在，执行模型推理
+            inputs = processor(images=[image], return_tensors="pt")
+            if isinstance(inputs, dict):
+                inputs = {k: v.to(device).to(dtype=torch.float32) if isinstance(v, torch.Tensor) else v
+                          for k, v in inputs.items()}
+            with torch.no_grad():
+                try:
+                    outputs = model(**inputs)
+                    if hasattr(outputs, 'last_hidden_state') and outputs.last_hidden_state is not None:
+                        features = outputs.last_hidden_state
+                        feature_map = torch.var(features, dim=1).squeeze().cpu().numpy()
+                    else:
+                        feature_map = compute_brightness_based_features(image)
+                except Exception as e:
+                    print(f"特征提取失败，使用后备方案: {e}")
+                    feature_map = compute_brightness_based_features(image)
+
+            # 保存到缓存
+            if cache_dir is not None and image_id is not None:
+                np.save(cache_path, feature_map)
+                print("特征图已缓存")
+
+        # 上采样到原图尺寸
+        zoom_factor = (original_height / feature_map.shape[0],
+                       original_width / feature_map.shape[1])
+        heatmap_resized = zoom(feature_map, zoom_factor, order=1)
+
+        # 归一化
+        heatmap_norm = (heatmap_resized - heatmap_resized.min()) / (heatmap_resized.max() - heatmap_resized.min() + 1e-8)
+
+        # 应用颜色映射并叠加
+        colormap = plt.cm.jet
+        heatmap_colored = colormap(heatmap_norm)[:, :, :3]
+        image_np = np.array(image) / 255.0
+        overlay = 0.5 * image_np + 0.5 * heatmap_colored
+        overlay = (overlay * 255).astype(np.uint8)
+
+        overlay_img = Image.fromarray(overlay)
+        overlay_img.save(output_path)
+        return output_path
+    except Exception as e:
+        print(f"生成热力图失败: {e}")
+        # 备选：保存灰度图
+        fallback_path = output_path.replace('.png', '_fallback.png')
+        Image.new('RGB', (original_width, original_height), color='gray').save(fallback_path)
+        return fallback_path
+    
 # 改进基于图像亮度计算特征的函数
 def compute_brightness_based_features(image):
     """基于图像亮度计算特征，作为后备方案"""

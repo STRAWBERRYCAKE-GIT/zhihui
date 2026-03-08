@@ -129,6 +129,7 @@ function App() {
       setUploadSuccess(true);
       setUploading(false);
       setEvaluationCompleted(false);
+      setAnnotationCompleted(false);
       setEvaluation({
         filename: original_name,
         strengths: [],
