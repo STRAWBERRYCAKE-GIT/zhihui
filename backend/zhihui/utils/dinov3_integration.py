@@ -1,5 +1,4 @@
 import torch
-import hashlib
 import numpy as np
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
@@ -512,19 +511,18 @@ def calculate_bubble_positions(
     从检测到的区域中选择最佳的气泡放置位置
     优先选择置信度高、分布均匀的位置，避免重叠
     """
-    # 合并空白区域和内容区域，优先选择内容区域
+    # 合并空白区域和内容区域
     all_positions = []
     if content_spaces:
-        # 为内容区域增加权重
-        weighted_content = [{**pos, "confidence": pos["confidence"] * 1.5} for pos in content_spaces]
-        all_positions.extend(weighted_content)
+        # weighted_content = [{**pos, "confidence": pos["confidence"] * 1.5} for pos in content_spaces]
+        all_positions.extend(content_spaces)
     
     if blank_spaces:
         all_positions.extend(blank_spaces)
     
     # 按置信度排序
     all_positions.sort(key=lambda p: p["confidence"], reverse=True)
-    print(f"检测到的候选位置（含内容区域加权）: {all_positions}")
+    print(f"检测到的候选位置: {all_positions}")
     if not all_positions:
         # 如果没有检测到任何区域，返回默认位置
         return [

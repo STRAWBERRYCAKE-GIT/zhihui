@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict, Any, Tuple
 from io import BytesIO
-
 import torch
 import torch.nn.functional as F
 from PIL import Image
@@ -188,7 +187,9 @@ def match_texts_to_image_blank_regions(
     image_stream,
     candidate_texts: List[str],
     max_candidates: int = 8,
-    patch_size: int = 224
+    patch_size: int = 224,
+    image_id=None,
+    cache_dir=None
 ) -> Dict[str, Any]:
     """
     使用 CN-CLIP 将候选中文文本与图像进行匹配，
@@ -213,9 +214,10 @@ def match_texts_to_image_blank_regions(
 
     # 内容区域候选（用于生成图像局部 patch）
     content_points = detect_content_regions(image_stream, num_regions=max(len(candidate_texts), 5)) or []
+ 
     # 重置流，获取空白位置候选
     image_stream.seek(0)
-    blank_points = detect_blank_spaces(image_stream, focus_on_content=False) or []
+    blank_points = detect_blank_spaces(image_stream, focus_on_content=False, cache_dir=cache_dir, image_id=image_id) or []
     gray_np = np.array(image.convert("L"))
 
     # 如果没内容点，使用中心点兜底

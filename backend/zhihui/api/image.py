@@ -160,51 +160,17 @@ def _perform_annotation(image_id, user_id, app):
         }
 
         with open(filepath, 'rb') as f:
-            # ---------- DINOv3 检测空白区域和内容区域 ----------
-            try:
-                f.seek(0)
-                from PIL import Image
-                img_pil = Image.open(f)
-                width, height = img_pil.size
-                f.seek(0)
-                
-                # 构造缓存目录
-                upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
-                cache_dir = upload_folder  # 特征图缓存将放在 uploads/feature_maps/ 下
+            f.seek(0)
+            from PIL import Image
+            img_pil = Image.open(f)
+            width, height = img_pil.size
+            f.seek(0)
+            
+            # 构造缓存目录
+            upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+            cache_dir = upload_folder  # 特征图缓存将放在 uploads/feature_maps/ 下
 
-                blank_spaces = detect_blank_spaces(f, focus_on_content=False, cache_dir=cache_dir, image_id=image_id)
-                f.seek(0)
-                content_spaces = detect_content_regions(f)
-                bubble_positions = calculate_bubble_positions(width, height, blank_spaces)
-
-                evaluation_data['empty_regions'] = bubble_positions
-                evaluation_data['content_regions'] = content_spaces
-
-                # ---------- 异步生成热力图（不阻塞后续） ----------
-                def generate_heatmap_task():
-                    try:
-                        with app.app_context():
-                            heatmap_folder = os.path.join(upload_folder, 'heatmaps')
-                            os.makedirs(heatmap_folder, exist_ok=True)
-                            heatmap_filename = f"heatmap_{image_id}.png"
-                            heatmap_path = os.path.join(heatmap_folder, heatmap_filename)
-                            # 注意：这里需要重新打开文件流，因为当前文件流可能已被后续操作移动
-                            with open(filepath, 'rb') as f2:
-                                generate_heatmap(f2, heatmap_path, cache_dir=cache_dir, image_id=image_id)
-                            print(f"热力图已生成: {heatmap_path}")
-                    except Exception as e:
-                        print(f"热力图生成任务失败: {e}")
-
-                # 启动热力图生成线程（守护线程，随主线程退出而终止）
-                heatmap_thread = threading.Thread(target=generate_heatmap_task)
-                heatmap_thread.daemon = True
-                heatmap_thread.start()
-            except Exception as e:
-                print(f"dinov3处理失败: {e}")
-                evaluation_data['empty_regions'] = []
-                evaluation_data['content_regions'] = []
-
-            # ---------- 3. CN‑CLIP 处理（完整保留原逻辑） ----------
+            # ---------- CN‑CLIP 处理 ----------
             try:
                 # 汇总评价文本（作为兜底）
                 candidate_texts = []
@@ -338,10 +304,12 @@ def _perform_annotation(image_id, user_id, app):
                 cnclip_out = match_texts_to_image_blank_regions(
                     f,
                     candidate_texts_for_clip,
-                    max_candidates=len(candidate_texts_for_clip)
+                    max_candidates=len(candidate_texts_for_clip),
+                    image_id=image_id,
+                    cache_dir=cache_dir
                 )
                 mapping_raw = cnclip_out.get('text_region_mapping', []) or []
-
+                
                 # 将 keyword 注入映射，并将显示文本替换为“精简合并文本”
                 for m in mapping_raw:
                     txt = m.get('text')
@@ -424,6 +392,26 @@ def _perform_annotation(image_id, user_id, app):
                 evaluation_data['text_region_mapping'] = []
                 evaluation_data['cnclip_stats'] = {}
                 evaluation_data['cnclip_override_used'] = False
+
+            # ---------- 异步生成热力图（不阻塞后续） ----------
+            def generate_heatmap_task():
+                try:
+                    with app.app_context():
+                        heatmap_folder = os.path.join(upload_folder, 'heatmaps')
+                        os.makedirs(heatmap_folder, exist_ok=True)
+                        heatmap_filename = f"heatmap_{image_id}.png"
+                        heatmap_path = os.path.join(heatmap_folder, heatmap_filename)
+                        # 注意：这里需要重新打开文件流，因为当前文件流可能已被后续操作移动
+                        with open(filepath, 'rb') as f2:
+                            generate_heatmap(f2, heatmap_path, cache_dir=cache_dir, image_id=image_id)
+                        print(f"热力图已生成: {heatmap_path}")
+                except Exception as e:
+                    print(f"热力图生成任务失败: {e}")
+
+            # 启动热力图生成线程（守护线程，随主线程退出而终止）
+            heatmap_thread = threading.Thread(target=generate_heatmap_task)
+            heatmap_thread.daemon = True
+            heatmap_thread.start()
 
             # ---------- 解析评价结果，准备更新数据库 ----------
             c.execute("""
