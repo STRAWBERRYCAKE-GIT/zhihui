@@ -1,12 +1,14 @@
-from flask import current_app
 import pymysql
+from config import config
 
-#获取数据库连接
 def get_db_connection():
+    """获取数据库连接"""
+    
     return pymysql.connect(
-        host=current_app.config['MYSQL_HOST'],
-        user=current_app.config['MYSQL_USER'],
-        password=current_app.config['MYSQL_PASSWORD'],
-        database=current_app.config['MYSQL_DB'],
+        host=config.database.host,
+        user=config.database.user,
+        password=config.database.password,
+        database=config.database.database,
+        port=config.database.port,
         cursorclass=pymysql.cursors.DictCursor
     )

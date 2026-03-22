@@ -652,7 +652,7 @@ function App() {
 
               {/* 主内容区 */}
               <main className="main-content">
-                <div className="section-title">素描</div>
+                {/* <div className="section-title">素描</div> */}
                 {/* 气泡控制按钮 */}
                 {selectedImage && (
                   <>

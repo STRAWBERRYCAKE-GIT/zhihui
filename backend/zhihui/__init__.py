@@ -2,22 +2,22 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from datetime import timedelta
+from config import config
 import os
 
 
 def create_app():
     app = Flask(__name__)
-    app.config['MYSQL_HOST'] = 'localhost'
-    app.config['MYSQL_USER'] = 'root'
-    app.config['MYSQL_PASSWORD'] = '123456'
-    app.config['MYSQL_DB'] = 'zhihui_db'
-
-    app.config['JWT_SECRET_KEY'] = 'your-secret-key'    #挖个坑，以后记得设置一下
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
-    
-    # 添加图片上传配置
-    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB限制
+    # 初始化配置
+    app.config['DEBUG'] = config.debug
+    app.config['SECRET_KEY'] = config.secret_key
+    app.config['JWT_SECRET_KEY'] = config.jwt_secret_key
+    app.config['MAX_CONTENT_LENGTH'] = config.file_upload.max_file_size
+    app.config['UPLOAD_FOLDER'] = config.file_upload.upload_folder
+    # 添加 JWT 有效期配置
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)        # 访问令牌：1小时
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)       # 刷新令牌：30天
+    app.config['JWT_ALGORITHM'] = 'HS256'                              # 加密算法
 
 
     jwt = JWTManager(app)

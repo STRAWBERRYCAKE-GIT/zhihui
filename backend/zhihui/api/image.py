@@ -7,20 +7,10 @@ import threading
 import datetime
 import json
 import uuid
-from zhihui.utils.constants import ImageStatus  # 导入枚举
 from collections import defaultdict
 import re
-from zhihui.utils import get_db_connection, gpt_api
-# 从具体模块导入 DINOv3 相关方法，避免 __init__ 未导出导致的 ImportError
-from zhihui.utils.dinov3_integration import (
-    detect_blank_spaces,
-    calculate_bubble_positions,
-    detect_keyword_regions,
-    detect_content_regions,
-    generate_heatmap,
-)
-# CN‑CLIP 文本-图像匹配
-from zhihui.utils.clip_cn_integration import match_texts_to_image_blank_regions
+from zhihui.utils import get_db_connection, gpt_api,detect_blank_spaces,calculate_bubble_positions,generate_heatmap,match_texts_to_image_blank_regions,ImageStatus
+
 
 image_bp = Blueprint('image', __name__)
 
@@ -64,12 +54,10 @@ def _quick_evaluate(image_id, user_id, app):
                 return None, "AI 返回为空"
 
             # 解析返回结果
-            categorized_keywords = {}
             keyword_mentions = {}          
             if isinstance(raw, dict):
                 if 'evaluation' in raw:
                     evaluation_data = raw['evaluation']
-                    categorized_keywords = raw.get('categorized_keywords', {})
                     keyword_mentions = raw.get('keyword_mentions', {})   # 关键词命中句子
                 else:
                     evaluation_data = raw.get("data", raw)
@@ -95,7 +83,6 @@ def _quick_evaluate(image_id, user_id, app):
                     strengths = %s,
                     suggestions = %s,
                     dimensions = %s,
-                    categorized_keywords = %s,
                     keyword_mentions = %s
                 WHERE id = %s
             """, (
@@ -103,7 +90,6 @@ def _quick_evaluate(image_id, user_id, app):
                 json.dumps(strengths, ensure_ascii=False),
                 json.dumps(suggestions, ensure_ascii=False),
                 json.dumps(dimensions, ensure_ascii=False),
-                json.dumps(categorized_keywords, ensure_ascii=False),
                 json.dumps(keyword_mentions, ensure_ascii=False),
                 image_id
             ))
@@ -114,7 +100,6 @@ def _quick_evaluate(image_id, user_id, app):
                 "dimensions": dimensions,
                 "strengths": strengths,
                 "suggestions": suggestions,
-                "categorized_keywords": categorized_keywords,
                 "keyword_mentions": keyword_mentions,
             }
             return result, None
@@ -132,7 +117,7 @@ def _perform_annotation(image_id, user_id, app):
         # 获取图片文件名以及已保存的评价字段
         c.execute("""
             SELECT filename, strengths, suggestions, dimensions, 
-                   categorized_keywords, keyword_mentions
+                   keyword_mentions
             FROM images 
             WHERE id = %s AND user_id = %s
         """, (image_id, user_id))
@@ -150,7 +135,6 @@ def _perform_annotation(image_id, user_id, app):
             'strengths': json.loads(img['strengths']) if img['strengths'] else [],
             'suggestions': json.loads(img['suggestions']) if img['suggestions'] else [],
             'dimensions': json.loads(img['dimensions']) if img['dimensions'] else [],
-            'categorized_keywords': json.loads(img['categorized_keywords']) if img['categorized_keywords'] else {},
             'keyword_mentions': json.loads(img['keyword_mentions']) if img['keyword_mentions'] else {}
         }
         # 构建 summary 对象，供 CN‑CLIP 兜底逻辑使用
@@ -590,7 +574,6 @@ def get_image_detail(image_id):
             "empty_regions": parse_json_field(img['empty_regions'], []),
             "content_regions": parse_json_field(img['content_regions'], []),
             "text_region_mapping": parse_json_field(img['text_region_mapping'], []),
-            "categorized_keywords": parse_json_field(img['categorized_keywords'], {}),
             "keyword_mentions": parse_json_field(img['keyword_mentions'], {}),
             "status": img['status']
         }
@@ -662,7 +645,7 @@ def get_history():
 
                 # 查询包含气泡信息的完整数据
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, categorized_keywords, text_region_mapping, keyword_mentions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, text_region_mapping, keyword_mentions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -676,7 +659,6 @@ def get_history():
                     dimensions = json.loads(img['dimensions']) if img['dimensions'] else []
                     empty_regions = json.loads(img['empty_regions']) if img['empty_regions'] else []
                     content_regions = json.loads(img['content_regions']) if img.get('content_regions') else []
-                    categorized_keywords = json.loads(img['categorized_keywords']) if img.get('categorized_keywords') else {}
                     
                     # 解析气泡映射信息
                     text_region_mapping = json.loads(img['text_region_mapping']) if img.get('text_region_mapping') else []
@@ -694,7 +676,6 @@ def get_history():
                         "original_name": img['original_name'],
                         "empty_regions": empty_regions,
                         "content_regions": content_regions,
-                        "categorized_keywords": categorized_keywords,
                         "text_region_mapping": text_region_mapping,
                         "keyword_mentions": keyword_mentions
                     })
