@@ -111,7 +111,7 @@ backend/zhihui/uploads/
 /CLIP/
 /cn_clip_model/
 /uploads/
-/results/
 /dinov3_model/
 /.history/
 /dinov3-vitb16-pretrain-lvd1689m/
+results/
