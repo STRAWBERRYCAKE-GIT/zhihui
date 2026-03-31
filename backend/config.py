@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass,field
 from typing import Dict, List
 from dotenv import load_dotenv
+import torch
 
 load_dotenv()
 
@@ -17,21 +18,32 @@ class DatabaseConfig:
 @dataclass
 class OpenAIConfig:
     """OpenAI API配置"""
-    base_url: str = "https://api.getgoapi.com/v1/"
-    api_key: str = os.getenv("GETGO_API_KEY", "")
-    # base_url='https://api.openai-proxy.org/v1',
-    # api_key=os.getenv("OPENAI_API_KEY")
+    # base_url: str = "https://api.getgoapi.com/v1/"
+    # api_key: str = os.getenv("GETGO_API_KEY", "")
+    base_url:str="https://api.openai-proxy.org/v1"
+    api_key:str=os.getenv("OPENAI_API_KEY","")
+
+# @dataclass
+# class DINOv3Config:
+#     """DINOv3模型配置"""
+#     backbone_path: str = "E:/zhihui_to-c/dinov3-vitb16-pretrain-lvd1689m"
+#     head_path: str = "E:/zhihui_to-c/seghead_vitb16.pth"                        # 训练好的分割头权重
+
+#     # 设备
+#     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
+#     # 模型参数
+#     image_size: int = 224
+#     num_classes: int = 2          # 前景/背景
+#     register_tokens: int = 4      # DINOv3 的 register token 数量（一般配置为4）
 
 @dataclass
-class DINOv3Config:
-    """DINOv3模型配置"""
-    model_path: str = "E:/zhihui_to-c/dinov3-vitb16-pretrain-lvd1689m"
-    device: str = "cuda"  # 或 "cpu"
-    image_size: Dict[str, int] = None
-    
-    def __post_init__(self):
-        if self.image_size is None:
-            self.image_size = {"height": 224, "width": 224}
+class GroundingDINOConfig:
+    """Grounding DINO模型配置"""
+    url:str = "https://api.deepdataspace.com/v2/task/dinox/detection"
+    token:str = os.getenv("GroudingDINO_API_KEY","")
+    bbox_threshold:float = 0.25
+    iou_threshold:float = 0.8
 
 @dataclass
 class FileUploadConfig:
@@ -44,8 +56,11 @@ class FileUploadConfig:
         if self.allowed_extensions is None:
             self.allowed_extensions = ['png', 'jpg', 'jpeg', 'webp']
 
-
-
+@dataclass
+class FileResultConfig:
+    """生成文件配置"""
+    result_folder: str = "results"
+    
 @dataclass
 class AppConfig:
     """主应用配置"""
@@ -56,8 +71,9 @@ class AppConfig:
     # 子配置
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
-    dinov3: DINOv3Config = field(default_factory=DINOv3Config)
+    groundingdino: GroundingDINOConfig = field(default_factory=GroundingDINOConfig)
     file_upload: FileUploadConfig = field(default_factory=FileUploadConfig)
-
+    file_result: FileResultConfig = field(default_factory=FileResultConfig)
+    
 # 配置实例
 config = AppConfig()

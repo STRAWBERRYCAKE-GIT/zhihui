@@ -9,8 +9,11 @@ import json
 import uuid
 from collections import defaultdict
 import re
-from zhihui.utils import get_db_connection, gpt_api,detect_blank_spaces,calculate_bubble_positions,generate_heatmap,match_texts_to_image_blank_regions,ImageStatus
-
+from zhihui.utils import get_db_connection, gpt_api,ImageStatus,draw_masks_overlay
+import cv2
+from PIL import Image
+import numpy as np
+from pycocotools import mask as coco_mask
 
 image_bp = Blueprint('image', __name__)
 
@@ -110,11 +113,9 @@ def _quick_evaluate(image_id, user_id, app):
         conn.close()
 
 def _perform_annotation(image_id, user_id, app):
-    """后台执行批注（DINOv3 + CN‑CLIP），更新数据库"""
     conn = get_db_connection()
     try:
         c = conn.cursor()
-        # 获取图片文件名以及已保存的评价字段
         c.execute("""
             SELECT filename, strengths, suggestions, dimensions, 
                    keyword_mentions
@@ -124,300 +125,53 @@ def _perform_annotation(image_id, user_id, app):
         img = c.fetchone()
         if not img:
             return
-
         filename = img['filename']
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if not os.path.exists(filepath):
             return
 
-        # 构造 evaluation_data 字典，包含已有的评价数据
-        evaluation_data = {
-            'strengths': json.loads(img['strengths']) if img['strengths'] else [],
-            'suggestions': json.loads(img['suggestions']) if img['suggestions'] else [],
-            'dimensions': json.loads(img['dimensions']) if img['dimensions'] else [],
-            'keyword_mentions': json.loads(img['keyword_mentions']) if img['keyword_mentions'] else {}
-        }
-        # 构建 summary 对象，供 CN‑CLIP 兜底逻辑使用
-        evaluation_data['summary'] = {
-            'strengths': evaluation_data['strengths'],
-            'suggestions': evaluation_data['suggestions']
-        }
+        # ---------- 提取关键词 ----------
+        keyword_mentions = json.loads(img['keyword_mentions']) if img['keyword_mentions'] else {}
+        keywords = []
+        if isinstance(keyword_mentions, list):
+            for item in keyword_mentions:
+                kw = item.get('keyword')
+                if kw:
+                    keywords.append(kw)
+        elif isinstance(keyword_mentions, dict):
+            keywords = list(keyword_mentions.keys())
+        keywords = list(set(keywords))   # 去重
 
-        with open(filepath, 'rb') as f:
-            f.seek(0)
-            from PIL import Image
-            img_pil = Image.open(f)
-            width, height = img_pil.size
-            f.seek(0)
-            
-            # 构造缓存目录
-            upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
-            cache_dir = upload_folder  # 特征图缓存将放在 uploads/feature_maps/ 下
-
-            # ---------- CN‑CLIP 处理 ----------
+        # ----------DINO-x 检测 ----------
+        grounding_client = app.config.get('GROUNDING_CLIENT')
+        if grounding_client and keywords:
             try:
-                # 汇总评价文本（作为兜底）
-                candidate_texts = []
-                summary = evaluation_data.get("summary", {}) or {}
-                strengths = summary.get("strengths", []) or []
-                suggestions = summary.get("suggestions", []) or []
-                dimensions = evaluation_data.get("dimensions", []) or []
-                for s in strengths:
-                    if isinstance(s, str) and s.strip():
-                        candidate_texts.append(s.strip())
-                for s in suggestions:
-                    if isinstance(s, str) and s.strip():
-                        candidate_texts.append(s.strip())
-                for d in dimensions:
-                    comment = (d or {}).get('comment')
-                    if isinstance(comment, str) and comment.strip():
-                        candidate_texts.append(comment.strip())
+                # 构建 prompt（用英文点分隔）
+                prompt = ".".join(keywords)+".background"
+                with open(filepath, 'rb') as f:
+                    detections = grounding_client.detect(f, prompt)
+                print(f"Grounding DINO 检测到 {len(detections)} 个目标")
 
-                # 解析 GPT 返回的 keyword_mentions，聚合为“关键词 -> 多个子句/短语”
-                keyword_mentions = evaluation_data.get('keyword_mentions', {}) or {}
-                keyword_to_phrases = defaultdict(list)
-                try:
-                    if isinstance(keyword_mentions, list):
-                        for entry in keyword_mentions:
-                            kw = (entry or {}).get('keyword')
-                            sents = (entry or {}).get('sentences', []) or []
-                            if isinstance(kw, str) and kw.strip() and isinstance(sents, list):
-                                kw_norm = kw.strip()
-                                for s in sents:
-                                    if isinstance(s, str) and s.strip():
-                                        keyword_to_phrases[kw_norm].append(s.strip())
-                    elif isinstance(keyword_mentions, dict):
-                        for kw, sents in (keyword_mentions or {}).items():
-                            if isinstance(kw, str) and kw.strip() and isinstance(sents, list):
-                                kw_norm = kw.strip()
-                                for s in sents:
-                                    if isinstance(s, str) and s.strip():
-                                        keyword_to_phrases[kw_norm].append(s.strip())
-                except Exception:
-                    keyword_to_phrases = defaultdict(list)
-                print(f"解析后的 keyword_to_phrases: {dict(keyword_to_phrases)}")
-                # 加载同义词词库
-                try:
-                    # 根据蓝图所在目录定位 utils/keyword_lexicon.json
-                    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    lexicon_path = os.path.join(base_dir, 'utils', 'keyword_lexicon.json')
-                    with open(lexicon_path, 'r', encoding='utf-8') as lex_f:
-                        _lexicon_cache = json.load(lex_f)
-                except Exception:
-                    _lexicon_cache = {}
-
-                def _trim_sentence_for_keyword(sent: str, kw: str) -> str:
-                    if not isinstance(sent, str) or not sent.strip() or not isinstance(kw, str) or not kw.strip():
-                        return sent.strip() if isinstance(sent, str) else ""
-                    sent_norm = sent.strip()
-                    variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
-                    clauses = [c.strip() for c in re.split(r"[，。,；;、,！？!?:：]", sent_norm) if c.strip()]
-                    for clause in clauses:
-                        for v in variants:
-                            if v and v in clause:
-                                return clause
-                    for v in variants:
-                        idx = sent_norm.find(v)
-                        if idx != -1:
-                            start = max(0, idx - 8)
-                            end = min(len(sent_norm), idx + len(v) + 12)
-                            return sent_norm[start:end]
-                    return sent_norm
-
-                def _pick_representative(phrases: list, kw: str) -> str:
-                    """选一个代表短语用于图像匹配"""
-                    if not phrases:
-                        return kw
-                    variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
-                    scored = []
-                    for p in phrases:
-                        pn = p.strip()
-                        needs_trim = (len(pn) > 34) or sum(ch in pn for ch in "，。,；;、,！？!?:：") >= 2
-                        if needs_trim:
-                            pn = _trim_sentence_for_keyword(pn, kw)
-                        contains_kw = any(v in pn for v in variants)
-                        length = len(pn)
-                        target_len_bonus = -abs(length - 18)
-                        scored.append((contains_kw, target_len_bonus, length, pn))
-                    scored.sort(key=lambda t: (not t[0], -t[1], t[2]))
-                    return scored[0][3] if scored else kw
-
-                def _aggregate_phrases(phrases: list, kw: str, max_len: int = 30) -> str:
-                    """将同一关键词的多个短语精简合并为一个气泡文本"""
-                    if not phrases:
-                        return kw
-                    variants = (list((_lexicon_cache.get(kw, []) or [])) + [kw])
-                    uniq = []
-                    seen = set()
-                    for p in phrases:
-                        pn = p.strip()
-                        if pn and pn not in seen:
-                            seen.add(pn)
-                            uniq.append(pn)
-                    uniq.sort(key=lambda x: (not any(v in x for v in variants), len(x)))
-                    out = []
-                    total = 0
-                    for item in uniq:
-                        piece = item
-                        if len(piece) > 28 or sum(ch in piece for ch in "，。,；;、,！？!?:：") >= 3:
-                            piece = _trim_sentence_for_keyword(piece, kw)
-                        add_len = len(piece) + (1 if out else 0)
-                        if total + add_len <= max_len:
-                            out.append(piece)
-                            total += add_len
-                        else:
-                            break
-                    if not out:
-                        out = [_pick_representative(uniq, kw)]
-                    return "；".join(out)
-
-                keywords_sorted = list(keyword_to_phrases.keys())
-                rep_map = {}      # keyword -> representative phrase
-                bubble_text_map = {}  # keyword -> aggregated concise text
-                for kw in keywords_sorted:
-                    phrases = keyword_to_phrases.get(kw, [])
-                    rep_map[kw] = _pick_representative(phrases, kw)
-                    bubble_text_map[kw] = _aggregate_phrases(phrases, kw, max_len=int(app.config.get('BUBBLE_MAX_TEXT', 30)))
-
-                max_cand = int(app.config.get('CNCLIP_MAX_CANDIDATES', 12))
-                candidate_texts_for_clip = [rep_map[k] for k in keywords_sorted[:max_cand]]
-                phrase_to_keyword = {rep_map[k]: k for k in keywords_sorted[:max_cand]}
-
-                strict_min_conf = float(app.config.get('CNCLIP_MIN_CONF_STRICT', 0.42))
-                f.seek(0)
-                cnclip_out = match_texts_to_image_blank_regions(
-                    f,
-                    candidate_texts_for_clip,
-                    max_candidates=len(candidate_texts_for_clip),
-                    image_id=image_id,
-                    cache_dir=cache_dir
-                )
-                mapping_raw = cnclip_out.get('text_region_mapping', []) or []
-                
-                # 将 keyword 注入映射，并将显示文本替换为“精简合并文本”
-                for m in mapping_raw:
-                    txt = m.get('text')
-                    kw = phrase_to_keyword.get(txt)
-                    m['keyword'] = kw
-                    if kw:
-                        m['text'] = bubble_text_map.get(kw) or txt
-
-                def _center_from_rect(rect, conf):
-                    try:
-                        cx = (float(rect.get('x', 0.0)) + float(rect.get('width', 0.0)) / 2.0) * float(width)
-                        cy = (float(rect.get('y', 0.0)) + float(rect.get('height', 0.0)) / 2.0) * float(height)
-                        return {'x': int(round(cx)), 'y': int(round(cy)), 'confidence': float(conf)}
-                    except Exception:
-                        return {'x': int(width * 0.5), 'y': int(height * 0.5), 'confidence': float(conf)}
-
-                def _fused_conf(m):
-                    cnclip = float(m.get('confidence', 0.0))
-                    content_conf = float(m.get('content_conf', 0.0))
-                    empty_conf = float(m.get('empty_conf', 0.0))
-                    return 0.7 * cnclip + 0.2 * content_conf + 0.1 * empty_conf
-
-                def _rect_iou(a, b):
-                    ax1, ay1 = float(a.get('x', 0.0)), float(a.get('y', 0.0))
-                    ax2, ay2 = ax1 + float(a.get('width', 0.0)), ay1 + float(a.get('height', 0.0))
-                    bx1, by1 = float(b.get('x', 0.0)), float(b.get('y', 0.0))
-                    bx2, by2 = bx1 + float(b.get('width', 0.0)), by1 + float(b.get('height', 0.0))
-                    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-                    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-                    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
-                    inter = iw * ih
-                    area_a = max(0.0, (ax2 - ax1)) * max(0.0, (ay2 - ay1))
-                    area_b = max(0.0, (bx2 - bx1)) * max(0.0, (by2 - by1))
-                    union = area_a + area_b - inter + 1e-6
-                    return inter / union
-
-                def _apply_nms(mappings, iou_thresh=0.35, use_content_region=True):
-                    picked = []
-                    for m in sorted(mappings, key=_fused_conf, reverse=True):
-                        rect = m.get('region' if use_content_region else 'empty_region') or {}
-                        if not picked:
-                            picked.append(m); continue
-                        ok = True
-                        for pm in picked:
-                            prect = pm.get('region' if use_content_region else 'empty_region') or {}
-                            if _rect_iou(rect, prect) >= iou_thresh:
-                                ok = False; break
-                        if ok: picked.append(m)
-                    return picked
-
-                cleaned = [m for m in mapping_raw if float(m.get('confidence', 0.0)) >= strict_min_conf]
-                cleaned = _apply_nms(cleaned, iou_thresh=0.35, use_content_region=True)
-                final_selected = sorted(cleaned, key=_fused_conf, reverse=True)
-
-                evaluation_data['cnclip_stats'] = {
-                    'candidates_total': len(mapping_raw),
-                    'candidates_passing_conf': len(cleaned),
-                    'selected_after_nms': len(cleaned),
-                    'selected_after_dyn': len(cleaned),
-                    'selected_final': len(final_selected),
-                    'min_conf': strict_min_conf,
-                    't_dyn': None,
-                    'nms_iou_thresh': None
-                }
-                if final_selected:
-                    evaluation_data['text_region_mapping'] = final_selected
-                    evaluation_data['content_regions'] = [
-                        _center_from_rect(m.get('region', {}), m.get('confidence', 0.0)) for m in final_selected
-                    ]
-                    evaluation_data['empty_regions'] = [
-                        _center_from_rect(m.get('empty_region', {}), m.get('confidence', 0.0)) for m in final_selected
-                        if m.get('empty_region')
-                    ]
-                    evaluation_data['cnclip_override_used'] = True
-                else:
-                    evaluation_data['cnclip_override_used'] = False
-
+                # 生成掩码叠加图（调试用）
+                if detections and app.config.get('DEBUG'):
+                    masks_overlay_path = os.path.join(app.config['RESULT_FOLDER'], 'overlays', f"overlay_{image_id}.png")
+                    os.makedirs(os.path.dirname(masks_overlay_path), exist_ok=True)
+                    draw_masks_overlay(filepath, detections, masks_overlay_path, alpha=0.5)
+              
             except Exception as e:
-                print(f"CN‑CLIP 处理失败: {e}")
-                evaluation_data['text_region_mapping'] = []
-                evaluation_data['cnclip_stats'] = {}
-                evaluation_data['cnclip_override_used'] = False
+                print(f"Grounding DINO 调用失败: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("Grounding DINO 客户端未初始化或没有关键词")
+        conn.commit()
 
-            # ---------- 异步生成热力图（不阻塞后续） ----------
-            def generate_heatmap_task():
-                try:
-                    with app.app_context():
-                        heatmap_folder = os.path.join(upload_folder, 'heatmaps')
-                        os.makedirs(heatmap_folder, exist_ok=True)
-                        heatmap_filename = f"heatmap_{image_id}.png"
-                        heatmap_path = os.path.join(heatmap_folder, heatmap_filename)
-                        # 注意：这里需要重新打开文件流，因为当前文件流可能已被后续操作移动
-                        with open(filepath, 'rb') as f2:
-                            generate_heatmap(f2, heatmap_path, cache_dir=cache_dir, image_id=image_id)
-                        print(f"热力图已生成: {heatmap_path}")
-                except Exception as e:
-                    print(f"热力图生成任务失败: {e}")
-
-            # 启动热力图生成线程（守护线程，随主线程退出而终止）
-            heatmap_thread = threading.Thread(target=generate_heatmap_task)
-            heatmap_thread.daemon = True
-            heatmap_thread.start()
-
-            # ---------- 解析评价结果，准备更新数据库 ----------
-            c.execute("""
-                UPDATE images SET
-                    empty_regions = %s,
-                    content_regions = %s,
-                    text_region_mapping = %s,
-                    status = %s
-                WHERE id = %s
-            """, (
-                json.dumps(evaluation_data.get('empty_regions', []), ensure_ascii=False),
-                json.dumps(evaluation_data.get('content_regions', []), ensure_ascii=False),
-                json.dumps(evaluation_data.get('text_region_mapping', []), ensure_ascii=False),
-                ImageStatus.COMPLETED.value,  # 全部完成
-                image_id
-            ))
-            conn.commit()
     except Exception as e:
-        # 批注失败，将状态置为 FAILED
+        print(f"批注失败: {e}")
+        import traceback
+        traceback.print_exc()
         c.execute("UPDATE images SET status = %s WHERE id = %s", (ImageStatus.FAILED.value, image_id))
         conn.commit()
-        print(f"批注失败: {e}")
     finally:
         conn.close()
 
@@ -522,7 +276,7 @@ def evaluate_image(image_id):
         finally:
             conn.close()
 
-        # 2. 启动后台线程执行批注
+        # 启动后台线程执行批注
         def run_annotation(app, image_id, user_id):
             with app.app_context():
                 _perform_annotation(image_id, user_id, app)
@@ -736,25 +490,14 @@ def delete_image(image_id):
                 print(f"删除文件失败: {e}")
                 # 文件删除失败不影响数据库删除
 
-            # 删除特征图缓存
-            cache_dir = os.path.join(upload_folder, 'feature_maps')
-            cache_path = os.path.join(cache_dir, f"{image_id}.npy")
+            result_folder = current_app.config.get('RESULT_FOLDER', 'results')
+            overlays_path = os.path.join(result_folder, 'overlays', f"overlay_{image_id}.png")
             try:
-                if os.path.exists(cache_path):
-                    os.remove(cache_path)
-                    print(f"已删除特征图缓存: {cache_path}")
+                if os.path.exists(overlays_path):
+                    os.remove(overlays_path)
+                    print(f"已删除叠加图: {overlays_path}")
             except Exception as e:
-                print(f"删除特征图缓存失败: {e}")
-
-            # 删除热力图文件
-            heatmap_dir = os.path.join(upload_folder, 'heatmaps')
-            heatmap_path = os.path.join(heatmap_dir, f"heatmap_{image_id}.png")
-            try:
-                if os.path.exists(heatmap_path):
-                    os.remove(heatmap_path)
-                    print(f"已删除热力图: {heatmap_path}")
-            except Exception as e:
-                print(f"删除热力图失败: {e}")
+                print(f"删除叠加图失败: {e}")
                 
             # 删除数据库记录
             c.execute("DELETE FROM images WHERE id = %s", (image_id,))
@@ -771,47 +514,3 @@ def delete_image(image_id):
     except Exception as e:
         print(f"删除图片失败: {e}")
         return jsonify({"message": "删除失败，请稍后再试"}), 500
-
-# 使用dinov3检测图片空白区域的API
-@image_bp.route('/image/detect_blank', methods=['POST'])
-@jwt_required()
-def detect_image_blank():
-    try:
-        # 检查是否有文件部分
-        if 'file' not in request.files:
-            return jsonify({"message": "没有文件部分"}), 400
-
-        file = request.files['file']
-
-        # 如果用户没有选择文件
-        if file.filename == '':
-            return jsonify({"message": "未选择文件"}), 400
-
-        if file and allowed_file(file.filename):
-            try:
-                # 打开图片获取尺寸信息
-                from PIL import Image
-                img = Image.open(file.stream)
-                width, height = img.size
-
-                file.stream.seek(0)  # 重置文件流位置
-                # 调用dinov3检测空白区域
-                blank_spaces = detect_blank_spaces(file.stream)
-
-                # 计算气泡批注的最佳位置
-                bubble_positions = calculate_bubble_positions(width, height, blank_spaces)
-
-                return jsonify({
-                    "message": "空白区域检测成功",
-                    "empty_regions": bubble_positions
-                }), 200
-            except Exception as e:
-                return jsonify({
-                    "message": "空白区域检测失败",
-                    "error": str(e)
-                }), 500
-        else:
-            return jsonify({"message": "文件类型不允许"}), 400
-    except Exception as e:
-        print(f"检测空白区域失败: {e}")
-        return jsonify({"message": "服务器错误，请稍后再试"}), 500

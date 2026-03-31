@@ -1,90 +1,8 @@
-$env:OPENAI_API_KEY="sk-..."
-
-#修改数据库
-ALTER TABLE images ADD COLUMN text_region_mapping LONGTEXT NULL AFTER content_regions;
-TABLE images ADD COLUMN keyword_mentions LONGTEXT NULL AFTER text_region_mapping;
-# CN-CLIP更新
-1.库安装
-1.1 CLIP库（可能没用到 因为真正集成的是CN-CLIP）
-```
-git clone https://github.com/openai/CLIP.git
-cd CLIP
-pip install .
-```
-1.2 CN-CLIP库
-```
-pip install patch-ng
-set LMDB_PURE=1/$env:LMDB_PURE=1
-pip install cn_clip
-```
-权重文件打包发群里（有四个大的压缩包，其中CLIP就是1.1安装下来的）
-
-2.数据库更新
-images表
-```
-ALTER TABLE images ADD COLUMN text_region_mapping JSON NULL;
-```
-
-# 10.6更新
- 1.images表
- ```
-  ALTER TABLE zhihui_db.images ADD COLUMN empty_regions JSON;
-  ALTER TABLE zhihui_db.images ADD COLUMN content_regions JSON;
-  ALTER TABLE zhihui_db.images ADD COLUMN categorized_keywords LONGTEXT NULL AFTER empty_regions;
-  ALTER TABLE zhihui_db.images ADD COLUMN keyword_matches LONGTEXT NULL AFTER content_regions;
- ```
- 更新之后长这样：
- mysql> describe images;
-+----------------------+--------------+------+-----+---------+----------------+
-| Field                | Type         | Null | Key | Default | Extra          |
-+----------------------+--------------+------+-----+---------+----------------+
-| id                   | int          | NO   | PRI | NULL    | auto_increment |
-| user_id              | int          | NO   | MUL | NULL    |                |
-| filename             | varchar(255) | NO   |     | NULL    |                |
-| original_name        | varchar(255) | NO   |     | NULL    |                |
-| score                | int          | YES  |     | NULL    |                |
-| upload_time          | datetime     | NO   |     | NULL    |                |
-| strengths            | text         | YES  |     | NULL    |                |
-| image_url            | varchar(500) | NO   |     | NULL    |                |
-| suggestions          | text         | YES  |     | NULL    |                |
-| dimensions           | json         | YES  |     | NULL    |                |
-| empty_regions        | json         | YES  |     | NULL    |                |
-| categorized_keywords | longtext     | YES  |     | NULL    |                |
-| content_regions      | json         | YES  |     | NULL    |                |
-| keyword_matches      | longtext     | YES  |     | NULL    |                |
-+----------------------+--------------+------+-----+---------+----------------+
-
- 2.后端库更新
-
- ```
-pip install packaging
-pip install transformers
-pip install torch pillow numpy safetensors
-pip install openai
-pip install python-dotenv
- ```
-
-# 更新
-
-images表有修改
-
-```
-ALTER TABLE zhihui_db.images ADD image_url varchar(500) NOT NULL;
-ALTER TABLE zhihui_db.images DROP COLUMN evaluation;
-ALTER TABLE zhihui_db.images DROP COLUMN improvements;
-ALTER TABLE zhihui_db.images ADD suggestions TEXT NULL;
-ALTER TABLE zhihui_db.images ADD dimensions json NULL;
-```
-
-增加雷达图
-
-```
-npm install chart.js react-chartjs-2
-```
-
 # 项目介绍
 
 # 环境依赖
+
+`backend/requirements.txt`
 
 # 目录结构
 
@@ -92,6 +10,7 @@ npm install chart.js react-chartjs-2
 zhihui_to-c
 ├─ backend
 │  ├─ app.py
+│  ├─ config.py
 │  ├─ requirements.txt
 │  └─ zhihui
 │     ├─ advanced_image_analyzer.py
@@ -100,18 +19,15 @@ zhihui_to-c
 │     │  └─ user.py
 │     ├─ clip_adapter.py
 │     ├─ utils
-│     │  ├─ clip_cn_integration.py
+│     │  ├─ constants.py
 │     │  ├─ database.py
-│     │  ├─ dinov3_integration.py
-│     │  ├─ keyword_lexicon.json
+│     │  ├─ dino_x.py
+│     │  ├─ dino_x_utils.py
 │     │  ├─ VLM_api.py
 │     │  └─ __init__.py
 │     └─ __init__.py
 ├─ frontend
 │  ├─ .eslintrc.cjs
-│  ├─ frontend
-│  │  ├─ package-lock.json
-│  │  └─ package.json
 │  ├─ index.html
 │  ├─ package-lock.json
 │  ├─ package.json
@@ -227,13 +143,15 @@ zhihui_to-c
     `empty_regions` json DEFAULT NULL,
     `categorized_keywords` longtext,
     `content_regions` json DEFAULT NULL,
-    `keyword_matches` longtext,
     `text_region_mapping` json DEFAULT NULL,
     `keyword_mentions` longtext,
+    `status` enum('pending','processing','completed','failed') DEFAULT 'pending',
+    `mask_filename` varchar(100) DEFAULT NULL,
+    `anchors` json DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `user_id` (`user_id`),
     CONSTRAINT `images_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=163 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
   ```
 
   

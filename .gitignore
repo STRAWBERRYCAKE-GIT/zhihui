@@ -97,7 +97,7 @@ coverage.xml
 .pytest_cache/
 
 .uploads/
-# 上传的文件目录
+
 backend/zhihui/uploads/backend/dinov3_model/model.safetensors
 
 # 排除大模型文件
@@ -111,6 +111,7 @@ backend/zhihui/uploads/
 /CLIP/
 /cn_clip_model/
 /uploads/
+/results/
 /dinov3_model/
 /.history/
 /dinov3-vitb16-pretrain-lvd1689m/
