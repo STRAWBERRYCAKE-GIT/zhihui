@@ -9,7 +9,7 @@ import json
 import uuid
 from collections import defaultdict
 import re
-from zhihui.utils import get_db_connection, gpt_api,ImageStatus,draw_masks_overlay
+from zhihui.utils import get_db_connection, gpt_api,ImageStatus,draw_masks_overlay,layout_annotations, draw_annotations
 import cv2
 from PIL import Image
 import numpy as np
@@ -112,6 +112,38 @@ def _quick_evaluate(image_id, user_id, app):
     finally:
         conn.close()
 
+def merge_detections_by_category(detections):
+    """
+    将 category 相同的检测合并：
+    - mask 取逻辑或
+    - bbox 取包含所有框的最小外接矩形
+    - score 取最高分（可自定义）
+    """
+    merged = {}
+    for det in detections:
+        cat = det.get('category', 'unknown')
+        if cat == 'background':
+            continue
+        if cat not in merged:
+            merged[cat] = {
+                'category': cat,
+                'mask': det.get('mask').copy() if det.get('mask') is not None else None,
+                'bbox': list(det.get('bbox', [0,0,0,0])),  # [x1,y1,x2,y2]
+                'score': det.get('score', 0.0)
+            }
+        else:
+            prev = merged[cat]
+            # 合并 mask
+            if prev['mask'] is not None and det.get('mask') is not None:
+                prev['mask'] = np.logical_or(prev['mask'], det['mask']).astype(np.uint8)
+            # 扩展 bbox
+            x1, y1, x2, y2 = det.get('bbox', [0,0,0,0])
+            px1, py1, px2, py2 = prev['bbox']
+            prev['bbox'] = [min(px1, x1), min(py1, y1), max(px2, x2), max(py2, y2)]
+            # 保留最高分
+            prev['score'] = max(prev['score'], det.get('score', 0.0))
+    return list(merged.values())
+
 def _perform_annotation(image_id, user_id, app):
     conn = get_db_connection()
     try:
@@ -130,17 +162,20 @@ def _perform_annotation(image_id, user_id, app):
         if not os.path.exists(filepath):
             return
 
-        # ---------- 提取关键词 ----------
+        
         keyword_mentions = json.loads(img['keyword_mentions']) if img['keyword_mentions'] else {}
+        # 构建 keyword -> 评语文本 的映射
         keywords = []
+        comment_map = {}
         if isinstance(keyword_mentions, list):
             for item in keyword_mentions:
                 kw = item.get('keyword')
-                if kw:
-                    keywords.append(kw)
+                sentences = item.get('sentences', [])
+                if kw and sentences:
+                    comment_map[kw] = ''.join(sentences)
         elif isinstance(keyword_mentions, dict):
-            keywords = list(keyword_mentions.keys())
-        keywords = list(set(keywords))   # 去重
+            comment_map = keyword_mentions
+        keywords = list(comment_map.keys())
 
         # ----------DINO-x 检测 ----------
         grounding_client = app.config.get('GROUNDING_CLIENT')
@@ -150,7 +185,7 @@ def _perform_annotation(image_id, user_id, app):
                 prompt = ".".join(keywords)+".background"
                 with open(filepath, 'rb') as f:
                     detections = grounding_client.detect(f, prompt)
-                print(f"Grounding DINO 检测到 {len(detections)} 个目标")
+                print(f"DINO-x 检测到 {len(detections)} 个目标")
 
                 # 生成掩码叠加图（调试用）
                 if detections and app.config.get('DEBUG'):
@@ -159,12 +194,55 @@ def _perform_annotation(image_id, user_id, app):
                     draw_masks_overlay(filepath, detections, masks_overlay_path, alpha=0.5)
               
             except Exception as e:
-                print(f"Grounding DINO 调用失败: {e}")
+                print(f"DINO-x 调用失败: {e}")
                 import traceback
                 traceback.print_exc()
         else:
-            print("Grounding DINO 客户端未初始化或没有关键词")
-        conn.commit()
+            print("DINO-x 客户端未初始化或没有关键词")
+        
+        # ---------- 构建评语列表（与检测结果顺序一致） ----------
+        comments = []
+        fg_detections = merge_detections_by_category(detections)
+        for det in fg_detections:
+            label = det.get('category')
+            # 从 comment_map 中取对应评语，若没有则给个默认提示
+            comment = comment_map.get(label, f"{label}: 无评语")
+            comments.append(comment)
+
+        # ---------- 生成标注图 ----------
+        if fg_detections and comments:
+            # 提取背景掩码（如果有）
+            bg_mask = None
+            for det in detections:
+                if det.get('category') == 'background':
+                    bg_mask = det.get('mask')
+                    break
+
+            font_path = app.config.get('FONT_PATH', 'simhei.ttf')
+            # 获取图片尺寸
+            with Image.open(filepath) as pil_img:
+                img_w, img_h = pil_img.size
+
+            layout = layout_annotations(
+                image_size=(img_w, img_h),
+                detections=fg_detections,
+                comments=comments,
+                font_path=font_path,
+                background_mask=bg_mask
+            )
+
+            # 保存结果图
+            annotated_dir = os.path.join(app.config['RESULT_FOLDER'], 'annotated')
+            os.makedirs(annotated_dir, exist_ok=True)
+            annotated_filename = f"annotated_{image_id}.png"
+            annotated_path = os.path.join(annotated_dir, annotated_filename)
+            draw_annotations(filepath, layout, annotated_path, font_path)
+
+            # 更新数据库
+            c.execute("UPDATE images SET annotated_filename = %s WHERE id = %s",
+                      (annotated_filename, image_id))
+            conn.commit()
+            print(f"标注图已生成: {annotated_path}")
 
     except Exception as e:
         print(f"批注失败: {e}")
@@ -329,6 +407,7 @@ def get_image_detail(image_id):
             "content_regions": parse_json_field(img['content_regions'], []),
             "text_region_mapping": parse_json_field(img['text_region_mapping'], []),
             "keyword_mentions": parse_json_field(img['keyword_mentions'], {}),
+            "annotated_filename": img.get('annotated_filename'),
             "status": img['status']
         }
         return jsonify(result), 200
@@ -377,6 +456,32 @@ def get_image_file(filename):
         print(f"获取图片失败: {e}")
         abort(500)
 
+@image_bp.route('/image/annotated/<filename>', methods=['GET'])
+@jwt_required()
+def get_annotated_image(filename):
+    current_username = get_jwt_identity()
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        # 验证当前用户是否有权访问该批注图
+        c.execute("""
+            SELECT i.id FROM images i
+            JOIN users u ON i.user_id = u.id
+            WHERE u.username = %s AND i.annotated_filename = %s
+        """, (current_username, filename))
+        img = c.fetchone()
+        if not img:
+            abort(403)  # 无权访问
+
+        annotated_dir = os.path.join(current_app.config['RESULT_FOLDER'], 'annotated')
+        filepath = os.path.join(annotated_dir, filename)
+        if not os.path.exists(filepath):
+            abort(404)  # 文件不存在
+
+        return send_file(filepath)
+    finally:
+        conn.close()
+
 # 获取用户历史图片
 @image_bp.route('/image/history', methods=['GET'])
 @jwt_required()
@@ -399,7 +504,7 @@ def get_history():
 
                 # 查询包含气泡信息的完整数据
                 c.execute(
-                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, empty_regions, content_regions, text_region_mapping, keyword_mentions FROM images WHERE user_id = %s ORDER BY upload_time DESC",
+                    "SELECT id, score, upload_time, strengths, image_url, suggestions, dimensions, filename, original_name, annotated_filename FROM images WHERE user_id = %s ORDER BY upload_time DESC",
                     (user_id,)
                 )
                 images = c.fetchall()
@@ -411,12 +516,6 @@ def get_history():
                     strengths = json.loads(img['strengths']) if img['strengths'] else []
                     suggestions = json.loads(img['suggestions']) if img['suggestions'] else []
                     dimensions = json.loads(img['dimensions']) if img['dimensions'] else []
-                    empty_regions = json.loads(img['empty_regions']) if img['empty_regions'] else []
-                    content_regions = json.loads(img['content_regions']) if img.get('content_regions') else []
-                    
-                    # 解析气泡映射信息
-                    text_region_mapping = json.loads(img['text_region_mapping']) if img.get('text_region_mapping') else []
-                    keyword_mentions = json.loads(img['keyword_mentions']) if img.get('keyword_mentions') else {}
 
                     result.append({
                         "id": img['id'],
@@ -428,10 +527,7 @@ def get_history():
                         "dimensions": dimensions,
                         "filename": img['filename'],
                         "original_name": img['original_name'],
-                        "empty_regions": empty_regions,
-                        "content_regions": content_regions,
-                        "text_region_mapping": text_region_mapping,
-                        "keyword_mentions": keyword_mentions
+                        "annotated_filename": img['annotated_filename']
                     })
 
                 return jsonify({
@@ -499,6 +595,13 @@ def delete_image(image_id):
             except Exception as e:
                 print(f"删除叠加图失败: {e}")
                 
+            annotated_path = os.path.join(result_folder, 'annotated', f"annotated_{image_id}.png")
+            try:
+                if os.path.exists(annotated_path):
+                    os.remove(annotated_path)
+                    print(f"已删除标注图: {annotated_path}")
+            except Exception as e:
+                print(f"删除标注图失败: {e}") 
             # 删除数据库记录
             c.execute("DELETE FROM images WHERE id = %s", (image_id,))
             conn.commit()

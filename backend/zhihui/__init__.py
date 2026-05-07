@@ -16,6 +16,7 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = config.file_upload.max_file_size
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), config.file_upload.upload_folder)
     app.config['RESULT_FOLDER'] = os.path.join(os.path.dirname(__file__), config.file_result.result_folder)
+    app.config['FONT_PATH'] = os.path.join(app.root_path, 'static', 'fonts', 'simhei.ttf')
     # 添加 JWT 有效期配置
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)        # 访问令牌：1小时
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)       # 刷新令牌：30天

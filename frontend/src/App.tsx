@@ -23,6 +23,8 @@ function App() {
   const [evaluationCompleted, setEvaluationCompleted] = useState<boolean>(false);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [annotationCompleted, setAnnotationCompleted] = useState<boolean>(false);
+  const [originalImageBlobUrl, setOriginalImageBlobUrl] = useState<string | null>(null);
+  const [annotatedBlobUrl, setAnnotatedBlobUrl] = useState<string | null>(null);
   // 历史记录状态
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
@@ -36,13 +38,14 @@ function App() {
 
   // 气泡相关
   const [showBubbles, setShowBubbles] = useState<boolean>(false);
-  const [bubbleSentences, setBubbleSentences] = useState<string[]>([]);
+
 
   // 拖拽态
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // 视口扣减量（导航高度）
   const [viewportOffset, setViewportOffset] = useState(0);
+
   useEffect(() => {
     const selectors = ['.top-nav', '.app-header', 'header'];
     const computeOffset = () => {
@@ -265,7 +268,6 @@ function App() {
   };
 
   const startPolling = (imageId: number) => {
-    // 清除之前的轮询
     if (pollingInterval) clearInterval(pollingInterval);
 
     const poll = async () => {
@@ -273,42 +275,41 @@ function App() {
         const res = await axios.get(`/image/${imageId}`);
         const img = res.data;
 
-        // 如果批注字段已有数据，认为批注完成
-        if (img.text_region_mapping && img.text_region_mapping.length > 0) {
-          // 更新 evaluation 中的批注相关字段
-          setEvaluation((prev: any) => ({
-            ...prev,
-            empty_regions: img.empty_regions || [],
-            content_regions: img.content_regions || [],
-            text_region_mapping: img.text_region_mapping || []
-          }));
-
-          // 更新气泡句子
-          const mapped = (img.text_region_mapping || [])
-            .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
-            .filter((t: string) => t.length > 0);
-          setBubbleSentences(mapped);
-          setShowBubbles(mapped.length > 0);
+        if (img.annotated_filename) {
+          setShowBubbles(true);
           setAnnotationCompleted(true);
+
+          // ✅ 通过 axios 获取批注图 Blob（自动携带认证头）
+          try {
+            const imageRes = await axios.get(`/image/annotated/${img.annotated_filename}`, {
+              responseType: 'blob'
+            });
+            // 保存原图（如果尚未保存）
+            if (!originalImageBlobUrl && selectedImage) {
+              setOriginalImageBlobUrl(selectedImage); // 此时 selectedImage 仍是原图的 Blob URL
+            }
+            const annotatedBlobUrl = URL.createObjectURL(imageRes.data);
+            setAnnotatedBlobUrl(annotatedBlobUrl);
+            setSelectedImage(annotatedBlobUrl);
+          } catch (err) {
+            console.error('加载批注图失败:', err);
+            setError('加载批注图失败');
+          }
 
           // 停止轮询
           if (pollingInterval) clearInterval(pollingInterval);
           setPollingInterval(null);
         } else if (img.status === 'FAILED') {
-          // 批注失败，停止轮询并提示
           setError('批注生成失败');
           if (pollingInterval) clearInterval(pollingInterval);
           setPollingInterval(null);
         }
-        // 否则继续轮询
       } catch (err) {
-        console.error('轮询批注失败:', err);
+        console.error('轮询批注状态失败:', err);
       }
     };
 
-    // 立即执行一次
     poll();
-    // 每 2 秒轮询
     const interval = setInterval(poll, 2000);
     setPollingInterval(interval);
   };
@@ -375,7 +376,7 @@ function App() {
     try {
       const response = await axios.get(`${record.image_url}`, {
         responseType: 'blob',
-        timeout: 5000
+        timeout: 15000
       });
       const thumbnailUrl = URL.createObjectURL(response.data);
       setThumbnails(prev => ({ ...prev, [recordId]: thumbnailUrl }));
@@ -387,23 +388,40 @@ function App() {
   // 点击历史记录项
   const handleHistoryItemClick = async (record: any) => {
     try {
+      // 清理之前的状态
       setEvaluation(null);
       setSelectedDimension(null);
       setUploading(false);
       setUploadSuccess(false);
+      if (originalImageBlobUrl) URL.revokeObjectURL(originalImageBlobUrl);
+      if (annotatedBlobUrl) URL.revokeObjectURL(annotatedBlobUrl);
 
-      const response = await axios.get(`${record.image_url}`, {
-        responseType: 'blob',
-        timeout: 10000
-      });
-      const imageUrl = URL.createObjectURL(response.data);
-      setSelectedImage(imageUrl);
+      // 1. 加载原始图
+      const origRes = await axios.get(record.image_url, { responseType: 'blob', timeout: 10000 });
+      const origUrl = URL.createObjectURL(origRes.data);
+      setOriginalImageBlobUrl(origUrl);
+
+      // 2. 如果有批注图，加载批注图
+      let annoUrl: string | null = null;
+      if (record.annotated_filename) {
+        try {
+          const annoRes = await axios.get(`/image/annotated/${record.annotated_filename}`, { responseType: 'blob' });
+          annoUrl = URL.createObjectURL(annoRes.data);
+        } catch (e) {
+          console.error('加载批注图失败:', e);
+        }
+      }
+      setAnnotatedBlobUrl(annoUrl);
+      if (annoUrl) {
+        setAnnotationCompleted(true);
+        setEvaluationCompleted(true);  // 历史记录已有评分，也标记为已完成
+      }
+      setSelectedImage(annoUrl || origUrl);
+      setShowBubbles(!!annoUrl);   // 有批注图时，气泡按钮显示“隐藏标注”
 
       let dimensionsData = record.dimensions;
       let strengthsData = record.strengths;
       let suggestionsData = record.suggestions;
-      let emptyRegionsData = record.empty_regions || record.emptyRegions || [];
-      let contentRegionsData = record.content_regions || record.contentRegions || [];
 
       if (typeof dimensionsData === 'string') {
         try { dimensionsData = JSON.parse(dimensionsData); } catch { dimensionsData = []; }
@@ -414,44 +432,11 @@ function App() {
       if (typeof suggestionsData === 'string') {
         try { suggestionsData = JSON.parse(suggestionsData); } catch { suggestionsData = []; }
       }
-      if (typeof emptyRegionsData === 'string') {
-        try { emptyRegionsData = JSON.parse(emptyRegionsData); } catch { emptyRegionsData = []; }
-      }
-      if (typeof contentRegionsData === 'string') {
-        try { contentRegionsData = JSON.parse(contentRegionsData); } catch { contentRegionsData = []; }
-      }
 
       if (!Array.isArray(dimensionsData)) dimensionsData = [];
       if (!Array.isArray(strengthsData)) strengthsData = [];
       if (!Array.isArray(suggestionsData)) suggestionsData = [];
-      if (!Array.isArray(emptyRegionsData)) emptyRegionsData = [];
-      if (!Array.isArray(contentRegionsData)) contentRegionsData = [];
-
-      // 解析历史记录中的气泡映射信息
-      let textRegionMappingData = record.text_region_mapping || [];
       
-      console.log('🔍 历史记录批注数据调试:', {
-        recordId: record.id,
-        originalName: record.original_name,
-        rawTextRegionMapping: record.text_region_mapping,
-        dataType: typeof record.text_region_mapping,
-        dataLength: record.text_region_mapping ? record.text_region_mapping.length : 0
-      });
-      
-      if (typeof textRegionMappingData === 'string') {
-        try { 
-          textRegionMappingData = JSON.parse(textRegionMappingData); 
-          console.log('✅ JSON解析成功:', textRegionMappingData);
-        } catch (e) { 
-          console.log('❌ JSON解析失败:', e);
-          textRegionMappingData = []; 
-        }
-      }
-      if (!Array.isArray(textRegionMappingData)) {
-        console.log('⚠️ 数据不是数组，重置为空数组');
-        textRegionMappingData = [];
-      }
-
       // 设置评分与基础区域（历史项现在也包含气泡映射信息）
       setEvaluation({
         score: record.score,
@@ -459,28 +444,10 @@ function App() {
         suggestions: suggestionsData,
         dimensions: dimensionsData,
         filename: record.original_name || record.filename || '',
-        empty_regions: emptyRegionsData,
-        content_regions: contentRegionsData,
-        text_region_mapping: textRegionMappingData
       });
 
-      // 气泡文本使用历史记录中的关键词映射
-      const mapped = Array.isArray(textRegionMappingData)
-        ? textRegionMappingData
-            .map((m: any) => (typeof m?.text === 'string' ? m.text.trim() : ''))
-            .filter((t: string) => t.length > 0)
-        : [];
-      
-      console.log('🎈 气泡文本处理结果:', {
-        mappingCount: textRegionMappingData.length,
-        extractedTexts: mapped,
-        willShowBubbles: mapped.length > 0
-      });
-      
-      setBubbleSentences(mapped);
-      setShowBubbles(mapped.length > 0);
       setError(null);
-    } catch (err: any) {
+    }catch (err: any) {
       console.error('加载历史记录项失败:', err);
       const errorMsg = err.response?.status === 403 ? '没有权限查看此图片' : '加载图片失败，请稍后重试';
       setError(errorMsg);
@@ -492,7 +459,18 @@ function App() {
   const handleBackFromDetail = () => setSelectedDimension(null);
 
   // 气泡显示切换
-  const toggleBubbles = () => setShowBubbles(!showBubbles);
+  const toggleBubbles = () => {
+    if (!annotatedBlobUrl || !originalImageBlobUrl) return;
+    if (showBubbles) {
+      // 当前显示批注图 -> 切换为原图
+      setSelectedImage(originalImageBlobUrl);
+      setShowBubbles(false);
+    } else {
+      // 当前显示原图 -> 切换为批注图
+      setSelectedImage(annotatedBlobUrl);
+      setShowBubbles(true);
+    }
+  };
 
   // 删除历史记录
   const handleDeleteImage = async (imageId: number, imageName: string) => {
@@ -515,7 +493,6 @@ function App() {
             setEvaluation(null);
             setSelectedDimension(null);
             setShowBubbles(false);
-            setBubbleSentences([]);
           }
         }
         
@@ -561,19 +538,19 @@ function App() {
     }
   }, [isAuthenticated, user?.id]);
 
-  // 释放 Object URL
-  useEffect(() => {
-    return () => {
-      if (selectedImage && selectedImage.startsWith('blob:')) {
-        URL.revokeObjectURL(selectedImage);
-      }
-      Object.values(thumbnails).forEach(url => {
-        if (typeof url === 'string' && url.startsWith('blob:')) {
-          URL.revokeObjectURL(url);
-        }
-      });
-    };
-  }, [selectedImage, thumbnails]);
+  // // 释放 Object URL
+  // useEffect(() => {
+  //   return () => {
+  //     if (selectedImage && selectedImage.startsWith('blob:')) {
+  //       URL.revokeObjectURL(selectedImage);
+  //     }
+  //     Object.values(thumbnails).forEach(url => {
+  //       if (typeof url === 'string' && url.startsWith('blob:')) {
+  //         URL.revokeObjectURL(url);
+  //       }
+  //     });
+  //   };
+  // }, [selectedImage, thumbnails]);
 
   return (
     <Routes>
@@ -671,8 +648,8 @@ function App() {
                         </svg>
                         批注生成中
                       </button>
-                    ) : annotationCompleted && bubbleSentences.length > 0 ? (
-                      // 批注已完成且有气泡句子 → 显示可切换按钮
+                    ) : annotationCompleted ? (
+                      // 批注已完成 → 显示可切换按钮
                       <button
                         className="bubble-control-btn-aligned"
                         onClick={toggleBubbles}
@@ -684,7 +661,7 @@ function App() {
                           <line x1="9" y1="9" x2="9.01" y2="9" />
                           <line x1="15" y1="9" x2="15.01" y2="9" />
                         </svg>
-                        {showBubbles ? '隐藏气泡' : '显示气泡'}
+                        {showBubbles ? '隐藏批注' : '显示批注'}
                       </button>
                     ) : null}
                   </>
@@ -695,11 +672,6 @@ function App() {
                     <div className="image-with-name">
                       <ImageBubbles
                         imageUrl={selectedImage}
-                        sentences={[]} // 改为仅关键词驱动：不使用非关键词句子
-                        isVisible={showBubbles}
-                        emptyRegions={evaluation?.empty_regions || evaluation?.emptyRegions || []}
-                        contentRegions={evaluation?.content_regions || evaluation?.contentRegions || []}
-                        textRegionMapping={evaluation?.text_region_mapping || []} // 保持从后端原样传入（含 keyword/region/empty_region）
                         viewportOffset={viewportOffset}
                       />
                       {evaluation?.filename && (
@@ -722,7 +694,14 @@ function App() {
                         </svg>
                       </div>
                       <div className="upload-text">
-                        <p>拖拽图片到此处</p>
+                          <p>拖拽图片到此处</p>
+                          <p>-或-</p>
+                          <button
+                            className="upload-btn-inside"
+                            onClick={handlePlusButtonClick}  // 复用触发隐藏 input 的方法
+                          >
+                            选择文件
+                          </button>
                       </div>
                     </div>
                   )}

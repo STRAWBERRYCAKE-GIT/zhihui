@@ -379,6 +379,23 @@ html, body {
   z-index: 1; /* 确保容器有正确的层级 */
 }
 
+.upload-btn-inside {
+  margin-top: 12px;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FFA571 100%);
+  color: #fff;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.upload-btn-inside:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
 .image-with-name {
   display: flex;
   flex-direction: column;
@@ -458,9 +475,10 @@ html, body {
 
 .upload-text {
   color: #FFB59E;
-  font-size: 20px;
-  color: #FFB59E;
   font-size: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* .upload-button-container */

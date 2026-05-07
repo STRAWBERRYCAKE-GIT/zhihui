@@ -18,10 +18,10 @@ class DatabaseConfig:
 @dataclass
 class OpenAIConfig:
     """OpenAI API配置"""
-    # base_url: str = "https://api.getgoapi.com/v1/"
-    # api_key: str = os.getenv("GETGO_API_KEY", "")
-    base_url:str="https://api.openai-proxy.org/v1"
-    api_key:str=os.getenv("OPENAI_API_KEY","")
+    base_url: str = "https://api.getgoapi.com/v1/"
+    api_key: str = os.getenv("GETGO_API_KEY", "")
+    # base_url:str="https://api.openai-proxy.org/v1"
+    # api_key:str=os.getenv("OPENAI_API_KEY","")
 
 # @dataclass
 # class DINOv3Config:
