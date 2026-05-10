@@ -12,17 +12,19 @@ zhihui_to-c
 │  ├─ app.py
 │  ├─ config.py
 │  ├─ requirements.txt
+│  ├─ static
+│  │  └─ fonts
+│  │     └─ simhei.ttf
 │  └─ zhihui
-│     ├─ advanced_image_analyzer.py
 │     ├─ api
 │     │  ├─ image.py
 │     │  └─ user.py
-│     ├─ clip_adapter.py
 │     ├─ utils
 │     │  ├─ constants.py
 │     │  ├─ database.py
 │     │  ├─ dino_x.py
 │     │  ├─ dino_x_utils.py
+│     │  ├─ draw_utils.py
 │     │  ├─ VLM_api.py
 │     │  └─ __init__.py
 │     └─ __init__.py
@@ -40,17 +42,13 @@ zhihui_to-c
 │  │  │  └─ Register.tsx
 │  │  ├─ components
 │  │  │  ├─ DimensionDetail.tsx
-│  │  │  ├─ ErrorBoundary.tsx
 │  │  │  ├─ ImageBubbles.css
 │  │  │  ├─ ImageBubbles.tsx
 │  │  │  ├─ RadarChart.tsx
 │  │  │  ├─ ScoreRing.css
 │  │  │  └─ ScoreRing.tsx
 │  │  ├─ index.css
-│  │  ├─ main.tsx
-│  │  └─ utils
-│  │     ├─ README.md
-│  │     └─ textFilter.ts
+│  │  └─ main.tsx
 │  ├─ tsconfig.json
 │  └─ tsconfig.node.json
 └─ ReadMe.md

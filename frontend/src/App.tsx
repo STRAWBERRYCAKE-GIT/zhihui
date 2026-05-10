@@ -564,7 +564,7 @@ function App() {
               {/* 左侧导航栏 */}
               <aside className="sidebar">
                 <div className="sidebar-content">
-                  <div className="logo">LOGO</div>
+                  <div className="logo">智绘</div>
                   <div className="sidebar-buttons">
                     <button className="plus-button" onClick={handlePlusButtonClick}>
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
