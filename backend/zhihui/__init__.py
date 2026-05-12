@@ -35,10 +35,11 @@ def create_app():
     
     # 加载 DINO-X 客户端
     app.config['GROUNDING_CLIENT'] = grounding_client
-
+    
+    ALLOWED_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173').split(',')
     # 配置CORS - 支持DELETE方法
     CORS(app, 
-         origins=['http://localhost:5173'], 
+         origins=ALLOWED_ORIGINS, 
          supports_credentials=True,
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          allow_headers=['Content-Type', 'Authorization'])

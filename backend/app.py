@@ -8,7 +8,7 @@ import logging
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 # 健康检查，避免 OPTIONS / 404 噪音
-@app.route('/', methods=['GET', 'OPTIONS'])
+@app.route('/health', methods=['GET'])
 def health():
     return 'ok', 200
 
