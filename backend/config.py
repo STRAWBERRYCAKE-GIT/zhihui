@@ -9,11 +9,11 @@ load_dotenv()
 @dataclass
 class DatabaseConfig:
     """数据库配置"""
-    host: str = "localhost"
-    user: str = "root"
-    password: str = "123456"
-    database: str = "zhihui_db"
-    port: int = 3306
+    host: str = os.getenv("MYSQL_HOST", "localhost")
+    user: str = os.getenv("MYSQL_USERNAME", "root")
+    password: str = os.getenv("MYSQL_PASSWORD", "123456")
+    database: str = os.getenv("MYSQL_DATABASE", "zhihui_db")
+    port: int = int(os.getenv("MYSQL_PORT", 3306))
 
 @dataclass
 class OpenAIConfig:
@@ -64,7 +64,8 @@ class FileResultConfig:
 @dataclass
 class AppConfig:
     """主应用配置"""
-    debug: bool = True # 开发模式
+    # debug: bool = True # 开发模式
+    debug: bool = False # 生产模式
     secret_key: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-change-in-production")
     
