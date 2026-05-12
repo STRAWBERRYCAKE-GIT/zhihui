@@ -5,7 +5,7 @@ app = create_app()
 import logging
 
 # 静默 werkzeug 请求日志
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
+# logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 # 健康检查，避免 OPTIONS / 404 噪音
 @app.route('/health', methods=['GET'])
