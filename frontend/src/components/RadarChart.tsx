@@ -67,7 +67,7 @@ const RadarChart: React.FC<RadarChartProps> = ({ dimensions, onDimensionClick })
         pointLabels: {
           font: {
             size: 14, 
-            weight: '600' 
+            weight: 600 
           },
           color: '#333',
           padding: 10
@@ -87,7 +87,7 @@ const RadarChart: React.FC<RadarChartProps> = ({ dimensions, onDimensionClick })
       }
     },
     // 添加点击事件
-    onClick: (evt: any, elements: any) => {
+    onClick: (_evt: any, elements: any) => {
       if (elements.length > 0) {
         const index = elements[0].index;
         onDimensionClick(dimensions[index]);

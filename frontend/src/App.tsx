@@ -127,7 +127,7 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      const { image_id, filename, original_name } = response.data;
+      const { image_id, original_name } = response.data;
       setCurrentImageId(image_id);
       setUploadSuccess(true);
       setUploading(false);

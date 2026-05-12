@@ -27,7 +27,7 @@ const Register: React.FC = () => {
     try {
       
       // 发送注册请求 - 调用正确的API端点并传递所有必要参数
-      const response = await axios.post('/user/signin', {
+      await axios.post('/user/signin', {
         username,
         password,
         confirm_password: confirmPassword
