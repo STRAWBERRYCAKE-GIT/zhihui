@@ -1,5 +1,5 @@
 from zhihui import create_app
-
+import os
 app = create_app()
 
 import logging
@@ -13,4 +13,5 @@ def health():
     return 'ok', 200
 
 if __name__=='__main__':
-    app.run(debug=app.config['DEBUG'], port=5000, use_reloader=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=app.config['DEBUG'], use_reloader=False)
