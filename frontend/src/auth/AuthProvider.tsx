@@ -28,7 +28,7 @@ export const useAuth = () => {
 
 // 同步读取 localStorage 中的 token，立即设置 axios defaults（避免刷新时 race）
 const initialToken = localStorage.getItem('token');
-axios.defaults.baseURL = 'http://localhost:5000';
+// axios.defaults.baseURL = 'http://localhost:5000';
 if (initialToken) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
 } else {
