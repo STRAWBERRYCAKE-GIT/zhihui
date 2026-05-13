@@ -889,15 +889,6 @@ html, body {
   margin: 0 0 16px 0;
 }
 
-/* 登录和注册页面样式 */
-.login-container, .register-container {
-  max-width: 400px;
-  margin: 100px auto;
-  padding: 30px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-}
 
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
@@ -912,6 +903,81 @@ html, body {
   font-weight: 600;
 }
 
+/* 登录/注册页面 - 全屏背景图 */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed; /* 背景固定，滚动内容不移动 */
+  background-repeat: no-repeat;
+  position: relative;
+  z-index: 1;
+}
+
+/* 可选：半透明遮罩层，让背景图更深邃 */
+.auth-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.2); /* 深色遮罩，文字更易读 */
+  z-index: -1;
+}
+
+/* 重新定义登录/注册卡片样式，使用毛玻璃效果，提高可读性 */
+.login-container,
+.register-container {
+  background: rgba(255, 255, 255, 0.85); /* 半透明白色背景 */
+  backdrop-filter: blur(8px); /* 毛玻璃效果 */
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  padding: 40px;
+  width: 100%;
+  max-width: 450px;
+  margin: 0; /* 移除原有的 margin: 100px auto，由父级flex居中代替 */
+  transition: transform 0.3s ease;
+}
+
+.login-container:hover,
+.register-container:hover {
+  transform: translateY(-5px);
+}
+
+/* 保持原有表单元素样式不变，但可微调文字颜色 */
+.login-container h2,
+.register-container h2 {
+  color: #333;
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.form-group input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+button[type="submit"] {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FFA571 100%);
+  color: white;
+}
+
+/* 调整链接颜色，使其在深色背景下更明显 */
+.login-container a,
+.register-container a {
+  color: #FF6B6B;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-container a:hover,
+.register-container a:hover {
+  text-decoration: underline;
+}
 /* 气泡控制按钮样式 - 与素描字样同高度，与图片右边缘对齐 */
 .bubble-control-btn-aligned {
   position: absolute;

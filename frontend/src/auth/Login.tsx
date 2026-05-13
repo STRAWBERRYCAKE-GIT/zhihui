@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
+import loginBg from '../assets/images/login-bg.png';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -33,33 +34,38 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="login-container">
-      <h2>用户登录</h2>
-      {error && <div className="error-message">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="username">用户名:</label>
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="password">密码:</label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit">登录</button>
-      </form>
-      <p>还没有账号？<a href="/register">立即注册</a></p>
+    <div 
+      className="auth-page" 
+      style={{ backgroundImage: `url(${loginBg})` }}  // 内联样式
+    >
+      <div className="login-container">
+        <h2>用户登录</h2>
+        {error && <div className="error-message">{error}</div>}
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="username">用户名:</label>
+            <input
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="password">密码:</label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit">登录</button>
+        </form>
+        <p>还没有账号？<a href="/register">立即注册</a></p>
+      </div>
     </div>
   );
 };
